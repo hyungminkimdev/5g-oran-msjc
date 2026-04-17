@@ -27,7 +27,6 @@ This project implements the MSJC framework on the CCI xG Testbed using 3 distrib
 
 ## 6. Build & Test Commands
 - **Check Hardware:** `uhd_find_devices`
-- **Run UE:** `python3 tx_ue.py`
-- **Run Jammer:** `python3 jammer.py`
-- **Run Classifier:** `python3 classifier_v2.py`
-- **Run Stage 1 (Sanity + Detection Loop):** `python3 stage1_runner.py`
+- **Run UE (Instance-1):** `python3 ue_transmitter.py`
+- **Run Jammer (Instance-3):** `python3 jammer.py`
+- **Run MSJC Pipeline (Instance-2):** `python3 pipeline_runner.py`

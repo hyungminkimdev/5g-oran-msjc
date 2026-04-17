@@ -35,7 +35,7 @@ from stage1_mlp import (
 )
 
 # Stage 2: KSVM (이진 재검사)
-from stage2_runner import (
+from stage2_ksvm import (
     load_model as load_stage2_model,
     recheck    as stage2_recheck,
 )
