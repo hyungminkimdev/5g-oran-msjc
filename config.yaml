@@ -75,7 +75,7 @@ data:
   influxdb:
     enabled: true
     url: "http://localhost:8086"
-    token: "YOUR_TOKEN_HERE"
+    token: "TEST"
     org: "msjc"
     bucket: "jamming_kpi"
     batch_size: 100
