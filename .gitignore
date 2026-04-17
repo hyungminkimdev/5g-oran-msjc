@@ -1,0 +1,22 @@
+# === 보안 필수 (토큰 포함 — git 절대 금지) ===
+config.yaml
+
+# === 학습된 모델 (scp로 별도 배포) ===
+*.pth
+*.pkl
+
+# === 환경 / 캐시 ===
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.cache/
+.vscode-server/
+.influxdbv2/
+
+# === 연구 자료 ===
+*.pdf
+
+# === 기타 ===
+.DS_Store
+*.old

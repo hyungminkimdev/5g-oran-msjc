@@ -1,0 +1,93 @@
+# MSJC Project - Common Configuration (TEMPLATE)
+# 5G O-RAN Hierarchical Jamming Classification (CCI xG Testbed)
+#
+# 사용법: cp config.template.yaml config.yaml
+#         config.yaml 에서 토큰 등 인스턴스별 값 입력
+#         config.yaml 은 .gitignore 처리됨 — git에 커밋하지 말 것
+
+# ─────────────────────────────────────────────
+# Network / Infrastructure
+# ─────────────────────────────────────────────
+network:
+  gateway:
+    ip: "38.68.231.178"
+    user: "henrykim18345674"
+
+  nodes:
+    instance1_ue:
+      ip: "172.167.2.208"
+      role: "UE"
+      usrp:
+        ip: "192.168.114.2"
+        serial: "323DF47"
+        interface: "ens5"
+        mtu: 9000
+
+    instance2_classifier:
+      ip: "172.167.1.165"
+      role: "Classifier/RIC"
+      usrp:
+        ip: "192.168.116.2"
+        serial: "323DF42"
+        interface: "ens5"
+        mtu: 9000
+
+    instance3_jammer:
+      ip: "172.167.1.244"
+      role: "Jammer"
+      usrp:
+        ip: "192.168.115.2"
+        serial: "323EE55"
+        interface: "ens5"
+        mtu: 9000
+
+# ─────────────────────────────────────────────
+# MSJC Pipeline
+# ─────────────────────────────────────────────
+pipeline:
+  stage1_mlp:
+    task: "binary_anomaly_detection"
+    max_latency_ms: 5
+
+  stage2_ksvm:
+    task: "physical_jamming_classification"
+    max_latency_ms: 20
+
+  stage3_mobilenetv3:
+    task: "semantic_spectrogram_analysis"
+    input_size: [224, 224]
+    max_latency_ms: 100
+
+  oran_ric:
+    timing: "near_rt"
+    latency_range_ms: [10, 1000]
+
+# ─────────────────────────────────────────────
+# SDR / UHD
+# ─────────────────────────────────────────────
+sdr:
+  driver: "uhd"
+  stream_interface: "ens5"
+  mtu: 9000
+
+# ─────────────────────────────────────────────
+# Data & MLOps
+# ─────────────────────────────────────────────
+data:
+  influxdb:
+    enabled: true
+    url: "http://localhost:8086"
+    token: "YOUR_INFLUXDB_TOKEN_HERE"   # `influx auth list` 로 확인 후 붙여넣기
+    org: "msjc"
+    bucket: "jamming_kpi"
+    batch_size: 100
+    flush_interval_ms: 5000
+
+  clearml:
+    purpose: "Model management and retraining"
+
+# ─────────────────────────────────────────────
+# Model Update Policy
+# ─────────────────────────────────────────────
+model_update:
+  strategy: "in_place"   # Switch weights without service interruption
