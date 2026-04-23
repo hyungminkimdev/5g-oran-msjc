@@ -9,22 +9,11 @@
 # Network / Infrastructure
 # ─────────────────────────────────────────────
 network:
-  gateway:
-    ip: "38.68.231.178"
-    user: "henrykim18345674"
-
+  # gateway: 미사용 — ZeroTier 직접 연결로 전환 (ProxyJump 없음)
+  # 물리적 순서: Classifier → Jammer → UE
   nodes:
-    instance1_ue:
-      ip: "172.167.2.208"
-      role: "UE"
-      usrp:
-        ip: "192.168.114.2"
-        serial: "323DF47"
-        interface: "ens5"
-        mtu: 9000
-
     instance2_classifier:
-      ip: "172.167.1.165"
+      ip: "10.111.143.143"       # ZeroTier network: d5cc70b949
       role: "Classifier/RIC"
       usrp:
         ip: "192.168.116.2"
@@ -33,11 +22,20 @@ network:
         mtu: 9000
 
     instance3_jammer:
-      ip: "172.167.1.244"
+      ip: "10.111.143.61"        # ZeroTier network: e51276b157
       role: "Jammer"
       usrp:
         ip: "192.168.115.2"
         serial: "323EE55"
+        interface: "ens5"
+        mtu: 9000
+
+    instance1_ue:
+      ip: "10.111.143.165"       # ZeroTier network: b92226be69
+      role: "UE"
+      usrp:
+        ip: "192.168.114.2"
+        serial: "323DF47"
         interface: "ens5"
         mtu: 9000
 

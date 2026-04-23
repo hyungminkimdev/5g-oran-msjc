@@ -22,11 +22,13 @@ The classifier receives live 5G KPIs via the **E2 interface (E2SM-KPM)** from a 
 
 ## 2. Infrastructure & Hardware Mapping
 
-| Role | Instance | IP | USRP IP | USRP Serial |
-|---|---|---|---|---|
-| **UE (srsUE)** | Instance-1 | 10.111.143.165 | 192.168.114.2 | 323DF47 |
-| **gNB + 5GC + Near-RT RIC** | Instance-2 | 10.111.143.61 | 192.168.116.2 | 323DF42 |
-| **Jammer** | Instance-3 | 10.111.143.143 | 192.168.115.2 | 323EE55 |
+> **ZeroTier 직접 연결** (ProxyJump/Gateway 미사용) — 물리적 순서: Classifier → Jammer → UE
+
+| Role | Instance | ZeroTier IP | ZeroTier Net ID | USRP IP | USRP Serial |
+|---|---|---|---|---|---|
+| **UE (srsUE)** | Instance-1 | 10.111.143.165 | b92226be69 | 192.168.114.2 | 323DF47 |
+| **gNB + 5GC + Near-RT RIC** | Instance-2 | 10.111.143.143 | d5cc70b949 | 192.168.116.2 | 323DF42 |
+| **Jammer** | Instance-3 | 10.111.143.61 | e51276b157 | 192.168.115.2 | 323EE55 |
 
 **Network interfaces:** All USRP I/Q streams use `ens5` with **MTU 9000** (jumbo frames).
 

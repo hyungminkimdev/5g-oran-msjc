@@ -14,8 +14,10 @@ USRP X310 @ Classifier/RIC node (Instance-2)
                                  ├─ Normal → CLEAN 확정 (끝)
                                  └─ Attack → FN 포착 → [Stage 3 MobileNetV3] → 정밀 분류
 
+  + Temporal Analyzer: 슬라이딩 윈도우로 Constant/Random/Reactive 시간적 판별
+
 Phase 1: I/Q Sanity Check (5초간 수신 상태 확인)
-Phase 2: Stage 1+2+3 계단식 탐지 루프 (Ctrl+C까지 연속)
+Phase 2: Stage 1+2+3 계단식 탐지 루프 + Temporal 분석 (Ctrl+C까지 연속)
 """
 
 import sys
@@ -25,6 +27,7 @@ import yaml
 import numpy as np
 import uhd
 from datetime import datetime
+from collections import deque
 
 # Stage 1: MLP (5클래스)
 from stage1_mlp import (
@@ -96,7 +99,81 @@ def stop_stream(streamer):
 
 
 # ─────────────────────────────────────────────
-# 2. Phase 1 — Sanity Check
+# 2. Temporal Analyzer — 시간적 재밍 유형 분류
+# ─────────────────────────────────────────────
+class TemporalAnalyzer:
+    """
+    슬라이딩 윈도우 기반 재밍 유형 시간적 분석
+
+    개별 청크 MLP는 재밍 '존재' 여부는 탐지하지만,
+    Random/Reactive 버스트 청크는 Constant AWGN과 동일하게 보입니다.
+
+    시간적 패턴(공격률 + 주기성)으로 실제 유형을 판별:
+      Constant:  공격률 > 85%  (연속 재밍)
+      Random:    5~85% 공격률, 비주기적 (불규칙 간격 버스트)
+      Reactive:  5~85% 공격률, 주기적   (TDD 슬롯 모방)
+      Deceptive: MLP Deceptive 판정 비율 높음
+    """
+    WINDOW_SIZE = 500   # ~1초 분량
+
+    def __init__(self):
+        self.labels = deque(maxlen=self.WINDOW_SIZE)
+        self._prev = "CLEAN"
+
+    def update(self, label: str):
+        self.labels.append(label)
+
+    @property
+    def attack_rate(self) -> float:
+        if not self.labels:
+            return 0.0
+        return sum(1 for l in self.labels if l != "Normal") / len(self.labels)
+
+    def classify(self) -> str:
+        n = len(self.labels)
+        if n < 50:
+            return self._prev
+
+        labels_list = list(self.labels)
+        attack_count = sum(1 for l in labels_list if l != "Normal")
+        rate = attack_count / n
+
+        if rate < 0.03:
+            v = "CLEAN"
+        else:
+            attack_labels = [l for l in labels_list if l != "Normal"]
+            deceptive_frac = (sum(1 for l in attack_labels if l == "Deceptive")
+                              / max(len(attack_labels), 1))
+
+            if deceptive_frac > 0.3:
+                v = "Deceptive"
+            elif rate > 0.85:
+                v = "Constant"
+            else:
+                periodicity = self._periodicity(labels_list)
+                v = "Reactive" if periodicity > 0.25 else "Random"
+
+        self._prev = v
+        return v
+
+    def _periodicity(self, labels_list) -> float:
+        """공격 패턴 자기상관 기반 주기성 점수 (0~1)"""
+        arr = np.array([0.0 if l == "Normal" else 1.0 for l in labels_list])
+        arr -= arr.mean()
+        if np.std(arr) < 1e-8:
+            return 0.0
+        n = len(arr)
+        fft = np.fft.fft(arr, n=2 * n)
+        acf = np.fft.ifft(fft * np.conj(fft)).real[:n]
+        if acf[0] < 1e-12:
+            return 0.0
+        acf /= acf[0]
+        end = min(50, n - 1)
+        return float(np.max(acf[2:end])) if end > 2 else 0.0
+
+
+# ─────────────────────────────────────────────
+# 3. Phase 1 — Sanity Check
 # ─────────────────────────────────────────────
 SANITY_DURATION     = 5      # 초
 RSSI_WARN_THRESHOLD = -80.0  # dB
@@ -153,7 +230,7 @@ def run_sanity_check(streamer):
 
 
 # ─────────────────────────────────────────────
-# 3. Phase 2 — Stage 1 + 2 + 3 탐지 루프
+# 4. Phase 2 — Stage 1 + 2 + 3 탐지 루프
 # ─────────────────────────────────────────────
 def run_detection_loop(streamer,
                        s1_model, s1_scaler, s1_device,
@@ -163,12 +240,14 @@ def run_detection_loop(streamer,
 
     has_s2 = s2_pipeline is not None
     has_s3 = s3_model is not None
+    temporal = TemporalAnalyzer()
 
     print(f"\n{'='*80}")
     print("[Phase 2] MSJC 계단식 탐지 루프 (Ctrl+C 로 종료)")
     print(f"  Stage 1 (MLP)        : {' / '.join(S1_LABELS)}")
     print(f"  Stage 2 (KSVM)       : {'Normal 재검사 활성화' if has_s2 else '비활성화'}")
     print(f"  Stage 3 (MobileNetV3): {'Protocol-Aware 정밀 분류 활성화' if has_s3 else '비활성화'}")
+    print(f"  Temporal Analyzer    : 활성화 (window={temporal.WINDOW_SIZE}청크)")
     if has_s3:
         print(f"                         (Deceptive / FN 포착 → {' / '.join(S3_LABELS)})")
     print(f"{'='*80}\n")
@@ -197,18 +276,23 @@ def run_detection_loop(streamer,
         rssi = feat[0]
         ts   = datetime.now().strftime("%H:%M:%S.%f")[:-3]
 
+        # ── Temporal Analyzer 업데이트 ──
+        temporal.update(s1_label)
+        t_verdict = temporal.classify()
+        t_rate    = temporal.attack_rate
+
         if s1_label in ("Constant", "Random", "Reactive"):
-            # ── 물리적 재밍 확정 — Stage 3 불필요 ──
+            # ── 물리적 재밍 탐지 — temporal로 유형 결정 ──
             stats["attacks"] += 1
             total_ms = (time.perf_counter() - t0) * 1000
             print(f"[{ts}] RSSI: {rssi:+7.2f} dB | "
                   f"S1: {s1_label:<10s}({s1_conf:.2f}) | "
-                  f"ATTACK CONFIRMED | {total_ms:.1f}ms")
+                  f"temporal: {t_verdict:<10s}({t_rate:4.0%}) | {total_ms:.1f}ms")
             if influx_logger:
                 influx_logger.log_detection(
                     rssi=rssi, spectral_flatness=feat[2],
                     s1_label=s1_label, s1_confidence=s1_conf,
-                    final_verdict="ATTACK_CONFIRMED", latency_ms=total_ms)
+                    final_verdict=t_verdict, latency_ms=total_ms)
 
         elif s1_label == "Deceptive":
             # ── Deceptive → Stage 3 Protocol-Aware 정밀 분류 ──
@@ -220,32 +304,35 @@ def run_detection_loop(streamer,
                 print(f"[{ts}] RSSI: {rssi:+7.2f} dB | "
                       f"S1: Deceptive ({s1_conf:.2f}) → "
                       f"S3: {s3_label:<18s}({s3_conf:.2f}) | "
-                      f"PROTOCOL-AWARE | {total_ms:.1f}ms")
+                      f"temporal: {t_verdict:<10s}({t_rate:4.0%}) | {total_ms:.1f}ms")
                 if influx_logger:
                     influx_logger.log_detection(
                         rssi=rssi, spectral_flatness=feat[2],
                         s1_label=s1_label, s1_confidence=s1_conf,
                         s3_label=s3_label, s3_confidence=s3_conf,
-                        final_verdict="PROTOCOL_AWARE", latency_ms=total_ms)
+                        final_verdict=t_verdict, latency_ms=total_ms)
             else:
                 total_ms = (time.perf_counter() - t0) * 1000
                 print(f"[{ts}] RSSI: {rssi:+7.2f} dB | "
                       f"S1: Deceptive ({s1_conf:.2f}) | "
-                      f"ATTACK CONFIRMED | {total_ms:.1f}ms")
+                      f"temporal: {t_verdict:<10s}({t_rate:4.0%}) | {total_ms:.1f}ms")
                 if influx_logger:
                     influx_logger.log_detection(
                         rssi=rssi, spectral_flatness=feat[2],
                         s1_label=s1_label, s1_confidence=s1_conf,
-                        final_verdict="ATTACK_CONFIRMED", latency_ms=total_ms)
+                        final_verdict=t_verdict, latency_ms=total_ms)
 
         elif has_s2:
             # ── Normal → Stage 2 재검사 ──
             is_attack, s2_conf, _ = stage2_recheck(iq, s2_pipeline)
 
             if is_attack:
-                # ── FN 포착 → Stage 3 정밀 분류 ──
+                # ── FN 포착 — temporal에 공격으로 반영 ──
                 stats["fn_caught"] += 1
                 stats["attacks"]   += 1
+                temporal.labels[-1] = "FN_Caught"
+                t_verdict = temporal.classify()
+                t_rate    = temporal.attack_rate
 
                 if has_s3:
                     s3_label, s3_conf, _ = stage3_classify(iq, s3_model, s3_device)
@@ -254,27 +341,27 @@ def run_detection_loop(streamer,
                           f"S1: Normal   ({s1_conf:.2f}) → "
                           f"S2: ATTACK   ({s2_conf:.2f}) → "
                           f"S3: {s3_label:<18s}({s3_conf:.2f}) | "
-                          f"FN → PROTOCOL-AWARE | {total_ms:.1f}ms")
+                          f"FN → temporal: {t_verdict} | {total_ms:.1f}ms")
                     if influx_logger:
                         influx_logger.log_detection(
                             rssi=rssi, spectral_flatness=feat[2],
                             s1_label="Normal", s1_confidence=s1_conf,
                             s2_confidence=s2_conf,
                             s3_label=s3_label, s3_confidence=s3_conf,
-                            final_verdict="FN_CAUGHT", fn_caught=True,
+                            final_verdict=t_verdict, fn_caught=True,
                             latency_ms=total_ms)
                 else:
                     total_ms = (time.perf_counter() - t0) * 1000
                     print(f"[{ts}] RSSI: {rssi:+7.2f} dB | "
                           f"S1: Normal   ({s1_conf:.2f}) → "
                           f"S2: ATTACK   ({s2_conf:.2f}) | "
-                          f"FN CAUGHT | {total_ms:.1f}ms")
+                          f"FN → temporal: {t_verdict} | {total_ms:.1f}ms")
                     if influx_logger:
                         influx_logger.log_detection(
                             rssi=rssi, spectral_flatness=feat[2],
                             s1_label="Normal", s1_confidence=s1_conf,
                             s2_confidence=s2_conf,
-                            final_verdict="FN_CAUGHT", fn_caught=True,
+                            final_verdict=t_verdict, fn_caught=True,
                             latency_ms=total_ms)
             else:
                 stats["normals"] += 1
@@ -292,15 +379,16 @@ def run_detection_loop(streamer,
 
         else:
             # ── Stage 2/3 비활성화 ──
-            verdict = "CLEAN" if s1_label == "Normal" else "ATTACK_CONFIRMED"
             if s1_label == "Normal":
                 stats["normals"] += 1
+                verdict = "CLEAN"
             else:
                 stats["attacks"] += 1
+                verdict = t_verdict
             total_ms = (time.perf_counter() - t0) * 1000
             print(f"[{ts}] RSSI: {rssi:+7.2f} dB | "
                   f"S1: {s1_label:<10s}({s1_conf:.2f}) | "
-                  f"{verdict} | {total_ms:.1f}ms")
+                  f"{verdict:<10s} | {total_ms:.1f}ms")
             if influx_logger:
                 influx_logger.log_detection(
                     rssi=rssi, spectral_flatness=feat[2],
@@ -312,7 +400,9 @@ def run_detection_loop(streamer,
             fn_rate = stats["fn_caught"] / max(stats["normals"] + stats["fn_caught"], 1)
             print(f"\n  [STATS] 총: {stats['total']} | "
                   f"공격: {stats['attacks']} | 정상: {stats['normals']} | "
-                  f"FN 포착: {stats['fn_caught']} ({fn_rate:.2%})\n")
+                  f"FN 포착: {stats['fn_caught']} ({fn_rate:.2%})")
+            print(f"  [TEMPORAL] 현재 판정: {t_verdict} | "
+                  f"공격률: {t_rate:.1%}\n")
 
 
 # ─────────────────────────────────────────────
