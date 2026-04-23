@@ -69,6 +69,21 @@ sdr:
   driver: "uhd"
   stream_interface: "ens5"
   mtu: 9000
+  snapshot_on_stage3: true        # xApp 모드에서 Stage3 트리거 시 I/Q 온디맨드 캡처
+
+# ─────────────────────────────────────────────
+# O-RAN Interfaces
+# ─────────────────────────────────────────────
+oran:
+  e2:
+    ric_addr: "127.0.0.1"          # FlexRIC Near-RT RIC 주소
+    ric_port: 36421                 # E2AP SCTP 포트 (FlexRIC default)
+    report_period_ms: 100           # E2SM-KPM 보고 주기 (Near-RT RIC: 10ms~1s)
+    e2sm_rc_enabled: false          # E2SM-RC 제어 활성화 (true: 재밍 탐지 시 gNB 제어)
+
+  gnb:
+    srsran_config: "srsran/gnb_msjc.yaml"   # srsRAN gNB 설정 파일 경로
+    e2_agent_addr: "127.0.0.1"              # gNB E2 에이전트 bind 주소
 
 # ─────────────────────────────────────────────
 # Data & MLOps
@@ -87,7 +102,17 @@ data:
     purpose: "Model management and retraining"
 
 # ─────────────────────────────────────────────
+# ClearML MLOps
+# ─────────────────────────────────────────────
+clearml:
+  enabled: false                    # ClearML 서버 연결 가능 시 true로 변경
+  project_name: "msjc-5g-oran"
+  queue_name: "default"
+  fn_rate_retrain_threshold: 0.05   # FN율 > 5% 시 재학습 자동 큐 등록
+
+# ─────────────────────────────────────────────
 # Model Update Policy
 # ─────────────────────────────────────────────
 model_update:
-  strategy: "in_place"   # Switch weights without service interruption
+  strategy: "in_place"              # 서비스 중단 없이 가중치 교체 (hot-reload)
+  check_interval_sec: 60            # 모델 파일 변경 감지 주기 (초)
