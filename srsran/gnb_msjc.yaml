@@ -31,7 +31,7 @@ cell_cfg:
 
   pdcch:
     common:
-      coreset0_index: 12
+      coreset0_index: 6
       ss0_index: 0
 
   pdsch:
