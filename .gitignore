@@ -20,3 +20,4 @@ __pycache__/
 # === 기타 ===
 .DS_Store
 *.old
+nohup.out

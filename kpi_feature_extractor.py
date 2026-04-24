@@ -48,7 +48,15 @@ _DEFAULTS = {
 # FlexRIC E2SM-KPM measurement name → our feature name mapping
 # Includes pass-through entries for FEATURE_NAMES themselves (used by MockFlexRIC)
 _KPM_KEY_MAP = {
-    # O-RAN / srsRAN KPM measurement names
+    # O-RAN / srsRAN KPM measurement names (swig_wrapper.cpp MSJC_KPM_MEAS 순서와 일치)
+    "DRB.UEThpDl":       "dl_throughput_mbps",
+    "L1M.DL-SS-SINR":    "sinr_db",
+    "L1M.SS-RSRP":       "rsrp_dbm",
+    "MR.SS-RSRQ":        "rsrq_db",
+    # TB.ErrTotNbrDl / TB.TotNbrDl → bler는 _KPMCallback에서 직접 계산
+    "bler":              "bler",
+    "DRB.RlcSduDelayDl": "bler",       # latency proxy (BLER 대리값)
+    # 추가 별칭 (표준 O-RAN / 3GPP 이름)
     "NR.RSRP.Avg":       "rsrp_dbm",
     "NR.RSRP":           "rsrp_dbm",
     "rsrp":              "rsrp_dbm",
@@ -58,11 +66,8 @@ _KPM_KEY_MAP = {
     "NR.SINR.Avg":       "sinr_db",
     "L1M.RS-SINR":       "sinr_db",
     "sinr":              "sinr_db",
-    "DRB.RlcSduDelayDl": "bler",
-    "bler":              "bler",
     "PUSCH.NackRatio":   "uci_nack_rate",
     "uci_nack_rate":     "uci_nack_rate",
-    "DRB.UEThpDl":       "dl_throughput_mbps",
     "dl_throughput":     "dl_throughput_mbps",
     "L1M.CQI.Avg":       "cqi_mean",
     "cqi":               "cqi_mean",
