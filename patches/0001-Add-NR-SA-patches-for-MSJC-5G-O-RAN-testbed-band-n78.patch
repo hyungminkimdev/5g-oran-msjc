@@ -1,0 +1,209 @@
+From c661d750d955ac879cac22807dcb814cfad24c42 Mon Sep 17 00:00:00 2001
+From: hyungminkimdev <henrykim9319@vt.edu>
+Date: Sun, 26 Apr 2026 00:53:23 +0000
+Subject: [PATCH] Add NR SA patches for MSJC 5G O-RAN testbed (band n78, 30kHz
+ SCS)
+
+- Add CORESET0 Table 13-4 (30kHz SSB + 30kHz PDCCH) per 3GPP TS 38.213
+- Derive SSB pattern from band (pattern C for n78) instead of hardcoding A
+- Accept 30kHz SCS in MIB processing (was limited to 15kHz)
+- Increase cell search max trials to 2000 for challenging RF environments
+- Add cell search progress logging every 100 trials
+- Rate-limit out-of-sync logging to reduce I/O overhead on VM
+- Add track failure tolerance (5 consecutive failures before FIND fallback)
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+---
+ lib/include/srsran/phy/ue/ue_sync_nr.h      |  3 ++
+ lib/src/phy/common/phy_common_nr.c          | 33 +++++++++++++++++++++
+ lib/src/phy/ue/ue_sync_nr.c                 | 11 +++++--
+ srsue/hdr/phy/nr/sync_sa.h                  |  2 +-
+ srsue/src/phy/sync_sa.cc                    | 16 +++++++++-
+ srsue/src/stack/rrc_nr/rrc_nr.cc            |  4 +++
+ srsue/src/stack/rrc_nr/rrc_nr_procedures.cc |  3 +-
+ 7 files changed, 66 insertions(+), 6 deletions(-)
+
+diff --git a/lib/include/srsran/phy/ue/ue_sync_nr.h b/lib/include/srsran/phy/ue/ue_sync_nr.h
+index 5aac74d..a07269b 100644
+--- a/lib/include/srsran/phy/ue/ue_sync_nr.h
++++ b/lib/include/srsran/phy/ue/ue_sync_nr.h
+@@ -96,6 +96,9 @@ typedef struct SRSRAN_API {
+   // Metrics
+   float cfo_hz;       ///< Current CFO in Hz
+   float avg_delay_us; ///< Current average delay
++
++  // Track failure tolerance for VM environments
++  uint32_t track_fail_count; ///< Consecutive PBCH decode failures in TRACK state
+ } srsran_ue_sync_nr_t;
+ 
+ /**
+diff --git a/lib/src/phy/common/phy_common_nr.c b/lib/src/phy/common/phy_common_nr.c
+index 4524743..357d96b 100644
+--- a/lib/src/phy/common/phy_common_nr.c
++++ b/lib/src/phy/common/phy_common_nr.c
+@@ -599,6 +599,29 @@ static const coreset_zero_entry_t coreset_zero_15_30[16] = {
+     {},
+ };
+ 
++// Table 13-4: {SS/PBCH block, PDCCH} SCS {30, 30} kHz, min channel BW 5 or 10 MHz
++// TS 38.213 Table 13-4
++// 3GPP TS 38.213 Table 13-4: {SSB SCS 30kHz, PDCCH SCS 30kHz}
++// Offsets step by 1 (unlike Table 13-1 which steps by 2)
++static const coreset_zero_entry_t coreset_zero_30_30[16] = {
++    {1, 24, 2, 0},
++    {1, 24, 2, 1},
++    {1, 24, 2, 2},
++    {1, 24, 2, 3},
++    {1, 24, 2, 4},
++    {1, 24, 3, 0},
++    {1, 24, 3, 1},
++    {1, 24, 3, 2},
++    {1, 24, 3, 3},
++    {1, 24, 3, 4},
++    {1, 48, 1, 12},
++    {1, 48, 1, 14},
++    {1, 48, 1, 16},
++    {1, 48, 2, 12},
++    {1, 48, 2, 14},
++    {1, 48, 2, 16},
++};
++
+ static const coreset_zero_entry_t coreset_zero_30_15[16] = {
+     {1, 48, 1, 2},
+     {1, 48, 1, 6},
+@@ -692,6 +715,11 @@ int srsran_coreset_zero(uint32_t                    n_cell_id,
+     entry = &coreset_zero_30_15[idx];
+   }
+ 
++  // Table 13-4: {SS/PBCH block, PDCCH} SCS {30, 30} kHz, min channel BW 5 or 10 MHz (e.g. band n78)
++  if (ssb_scs == srsran_subcarrier_spacing_30kHz && pdcch_scs == srsran_subcarrier_spacing_30kHz) {
++    entry = &coreset_zero_30_30[idx];
++  }
++
+   // Check a valid entry has been selected
+   if (entry == NULL) {
+     ERROR("Unhandled case ssb_scs=%s, pdcch_scs=%s",
+@@ -773,6 +801,11 @@ int srsran_coreset0_ssb_offset(uint32_t idx, srsran_subcarrier_spacing_t ssb_scs
+     entry = &coreset_zero_30_15[idx];
+   }
+ 
++  // Table 13-4: {SS/PBCH block, PDCCH} SCS {30, 30} kHz, min channel BW 5 or 10 MHz (e.g. band n78)
++  if (ssb_scs == srsran_subcarrier_spacing_30kHz && pdcch_scs == srsran_subcarrier_spacing_30kHz) {
++    entry = &coreset_zero_30_30[idx];
++  }
++
+   // Check a valid entry has been selected
+   if (entry == NULL) {
+     ERROR("Unhandled case ssb_scs=%s, pdcch_scs=%s",
+diff --git a/lib/src/phy/ue/ue_sync_nr.c b/lib/src/phy/ue/ue_sync_nr.c
+index bbd308a..5aeb04c 100644
+--- a/lib/src/phy/ue/ue_sync_nr.c
++++ b/lib/src/phy/ue/ue_sync_nr.c
+@@ -152,7 +152,7 @@ static int ue_sync_nr_update_ssb(srsran_ue_sync_nr_t*                 q,
+   q->sf_idx  = srsran_ssb_candidate_sf_idx(&q->ssb, pbch_msg->ssb_idx, pbch_msg->hrf);
+   q->sfn     = mib.sfn;
+ 
+-  // Transition to track only if the measured delay is below 2.4 microseconds
++  // Transition to track when timing is within cyclic prefix tolerance
+   if (measurements->delay_us < 2.4f) {
+     q->state = SRSRAN_UE_SYNC_NR_STATE_TRACK;
+   }
+@@ -204,12 +204,17 @@ static int ue_sync_nr_run_track(srsran_ue_sync_nr_t* q, cf_t* buffer)
+     return SRSRAN_ERROR;
+   }
+ 
+-  // If the PBCH message was NOT decoded, transition to find
++  // If the PBCH message was NOT decoded, allow a few failures before falling back to FIND
+   if (!pbch_msg.crc) {
+-    q->state = SRSRAN_UE_SYNC_NR_STATE_FIND;
++    q->track_fail_count++;
++    if (q->track_fail_count >= 5) {
++      q->state = SRSRAN_UE_SYNC_NR_STATE_FIND;
++      q->track_fail_count = 0;
++    }
+     return SRSRAN_SUCCESS;
+   }
+ 
++  q->track_fail_count = 0;
+   return ue_sync_nr_update_ssb(q, &measurements, &pbch_msg);
+ }
+ 
+diff --git a/srsue/hdr/phy/nr/sync_sa.h b/srsue/hdr/phy/nr/sync_sa.h
+index 07dd9a5..591b8a6 100644
+--- a/srsue/hdr/phy/nr/sync_sa.h
++++ b/srsue/hdr/phy/nr/sync_sa.h
+@@ -112,7 +112,7 @@ private:
+   srsran::rf_timestamp_t       last_rx_time;
+   std::atomic<bool>            is_pending_tx_end      = {false};
+   uint32_t                     cell_search_nof_trials = 0;
+-  const static uint32_t        cell_search_max_trials = 100;
++  const static uint32_t        cell_search_max_trials = 2000;
+   uint32_t                     sfn_sync_nof_trials    = 0;
+   const static uint32_t        sfn_sync_max_trials    = 100;
+ 
+diff --git a/srsue/src/phy/sync_sa.cc b/srsue/src/phy/sync_sa.cc
+index 5529aaf..0fd69ce 100644
+--- a/srsue/src/phy/sync_sa.cc
++++ b/srsue/src/phy/sync_sa.cc
+@@ -261,6 +261,15 @@ void sync_sa::run_state_cell_search()
+ 
+   srsran_vec_cf_copy(rx_buffer, rx_buffer + slot_sz, slot_sz);
+ 
++  // Log progress every 100 trials to help diagnose cell search failures
++  if (cell_search_nof_trials % 100 == 0) {
++    logger.info("Cell search trial %u/%u: snr=%.1f dB crc=%d",
++                cell_search_nof_trials,
++                cell_search_max_trials,
++                cs_ret.ssb_res.measurements.snr_dB,
++                cs_ret.ssb_res.pbch_msg.crc ? 1 : 0);
++  }
++
+   cell_search_nof_trials++;
+ 
+   // Leave CELL_SEARCH state if error or success and transition to IDLE
+@@ -306,7 +315,12 @@ void sync_sa::run_state_cell_camping()
+   rf_buffer.set_nof_samples(slot_sz);
+   rf_buffer.set(0, nr_worker->get_buffer(0, 0));
+   if (not slot_synchronizer.run_camping(rf_buffer, last_rx_time)) {
+-    logger.error("SYNC: detected out-of-sync... skipping slot ...");
++    // Rate-limit out-of-sync logging to reduce I/O overhead (was ~2000 msgs/sec)
++    static uint32_t oos_count = 0;
++    oos_count++;
++    if (oos_count <= 1 || oos_count % 1000 == 0) {
++      logger.warning("SYNC: out-of-sync (count=%u), skipping slot ...", oos_count);
++    }
+     is_pending_tx_end = true;
+     nr_worker->release();
+     return;
+diff --git a/srsue/src/stack/rrc_nr/rrc_nr.cc b/srsue/src/stack/rrc_nr/rrc_nr.cc
+index 325ee70..2cbc624 100644
+--- a/srsue/src/stack/rrc_nr/rrc_nr.cc
++++ b/srsue/src/stack/rrc_nr/rrc_nr.cc
+@@ -110,6 +110,10 @@ int rrc_nr::init(phy_interface_rrc_nr*       phy_,
+     phy_cfg.ssb.periodicity_ms       = 10;
+     phy_cfg.ssb.position_in_burst[0] = true;
+     phy_cfg.ssb.scs                  = args.ssb_scs;
++    {
++      srsran_ssb_pattern_t derived = bands.get_ssb_pattern(bands.get_band_from_dl_arfcn(args.dl_nr_arfcn), args.ssb_scs);
++      phy_cfg.ssb.pattern = (derived != SRSRAN_SSB_PATTERN_INVALID) ? derived : SRSRAN_SSB_PATTERN_A;
++    }
+   }
+ 
+   running               = true;
+diff --git a/srsue/src/stack/rrc_nr/rrc_nr_procedures.cc b/srsue/src/stack/rrc_nr/rrc_nr_procedures.cc
+index 619eac6..7a00765 100644
+--- a/srsue/src/stack/rrc_nr/rrc_nr_procedures.cc
++++ b/srsue/src/stack/rrc_nr/rrc_nr_procedures.cc
+@@ -436,7 +436,8 @@ rrc_nr::cell_selection_proc::handle_cell_search_result(const rrc_interface_phy_n
+     Error("Cell barred");
+     return proc_outcome_t::error;
+   }
+-  if (mib.scs_common != srsran_subcarrier_spacing_15kHz) {
++  if (mib.scs_common != srsran_subcarrier_spacing_15kHz &&
++      mib.scs_common != srsran_subcarrier_spacing_30kHz) {
+     Error("Unsupported SCS %s", srsran_subcarrier_spacing_to_str(mib.scs_common));
+     return proc_outcome_t::error;
+   }
+-- 
+2.43.0
+
