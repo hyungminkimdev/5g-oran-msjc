@@ -10,16 +10,21 @@ cu_cp:
     bind_addr: 127.0.0.1                  # loopback — gNB and AMF co-located on Instance-2
   inactivity_timer: 7200                  # seconds — keep UE connected for testing
 
+cu_up:
+  ngu:
+    socket:
+      - bind_addr: 127.0.0.2             # GTP-U N3 bind — avoid conflict with 127.0.0.1:2152
+
 ru_sdr:
   device_driver: uhd
-  device_args: addr=192.168.116.2
+  device_args: addr=192.168.116.2,num_send_frames=512,num_recv_frames=512
   srate: 23.04                            # MHz — required by srsRAN for 20 MHz channel BW
   tx_gain: 30
   rx_gain: 35
   otw_format: sc16                        # HG FPGA image: sc12 not supported, use sc16
 
 cell_cfg:
-  dl_arfcn: 632628                        # 3489.42 MHz center (NR band n78)
+  dl_arfcn: 632640                        # 3489.60 MHz center (NR band n78, aligned to GSCN 8519)
   band: 78
   channel_bandwidth_MHz: 20
   common_scs: 30                          # subcarrier spacing kHz (numerology mu=1)
@@ -31,7 +36,7 @@ cell_cfg:
 
   pdcch:
     common:
-      coreset0_index: 6
+      coreset0_index: 0
       ss0_index: 0
 
   pdsch:
@@ -58,6 +63,17 @@ e2:
   port: 36421                             # E2AP SCTP port (FlexRIC default)
   e2sm_kpm_enabled: true                  # enable KPM service model
   e2sm_rc_enabled: true                   # enable RC service model
+
+expert_phy:
+  max_proc_delay: 4                       # slots — default; 6 caused DL queue overflow in VM
+
+expert_execution:
+  affinities:
+    main_pool_cpus: "4,5,6,7"            # pin gNB main pool to cores 4-7 (dedicated)
+    main_pool_pinning: mask
+  threads:
+    main_pool:
+      nof_threads: 4
 
 log:
   filename: /tmp/gnb_msjc.log
