@@ -1,6 +1,6 @@
 # srsRAN Project gNB Configuration — MSJC 5G O-RAN Testbed
 # Instance-2: gNB + Near-RT RIC + 5GC
-# USRP X310 at 192.168.116.2, band n78, 20 MHz BW, SCS 30 kHz
+# USRP X310 at 192.168.116.2, band n78, 10 MHz BW, SCS 30 kHz
 # srsRAN Project v25.10.0 compatible
 
 cu_cp:
@@ -18,15 +18,17 @@ cu_up:
 ru_sdr:
   device_driver: uhd
   device_args: addr=192.168.116.2,num_send_frames=512,num_recv_frames=512
-  srate: 23.04                            # MHz — required by srsRAN for 20 MHz channel BW
-  tx_gain: 30
-  rx_gain: 35
+  srate: 11.52                            # MHz — required by srsRAN for 10 MHz channel BW
+  tx_gain: 31.5                           # UBX-160 max TX gain (range 0-31.5)
+  rx_gain: 31.5                          # UBX-160 max RX gain (range 0-31.5)
   otw_format: sc16                        # HG FPGA image: sc12 not supported, use sc16
+  expert_cfg:
+    tx_mode: same-port                    # TDD: use TX/RX port for both TX and RX
 
 cell_cfg:
   dl_arfcn: 632640                        # 3489.60 MHz center (NR band n78, aligned to GSCN 8519)
   band: 78
-  channel_bandwidth_MHz: 20
+  channel_bandwidth_MHz: 10
   common_scs: 30                          # subcarrier spacing kHz (numerology mu=1)
   nof_antennas_dl: 1
   nof_antennas_ul: 1
@@ -36,7 +38,7 @@ cell_cfg:
 
   pdcch:
     common:
-      coreset0_index: 0
+      coreset0_index: 2
       ss0_index: 0
 
   pdsch:
@@ -49,6 +51,8 @@ cell_cfg:
 
   prach:
     prach_config_index: 1
+    preamble_rx_target_pw: -80            # was default -100; raise so UE uses higher PRACH TX power
+    total_nof_ra_preambles: 64
 
   tdd_ul_dl_cfg:
     dl_ul_tx_period: 10                   # slots (5 ms periodicity)
@@ -65,19 +69,16 @@ e2:
   e2sm_rc_enabled: true                   # enable RC service model
 
 expert_phy:
-  max_proc_delay: 4                       # slots — default; 6 caused DL queue overflow in VM
+  max_proc_delay: 4                       # slots — original value when PRACH was detected
 
 expert_execution:
-  affinities:
-    main_pool_cpus: "4,5,6,7"            # pin gNB main pool to cores 4-7 (dedicated)
-    main_pool_pinning: mask
   threads:
     main_pool:
-      nof_threads: 4
+      nof_threads: 2
 
 log:
   filename: /tmp/gnb_msjc.log
-  all_level: warning
+  all_level: info
 
 pcap:
   mac_enable: false
