@@ -161,14 +161,14 @@ Stage 3 MobileNetV3 still uses **2D spectrograms**, but sourced from:
 ├── kpi_feature_extractor.py   ← E2SM-KPM report → 8-dim numpy feature vector
 ├── iq_snapshot.py             ← On-demand I/Q capture for Stage 3 (via srsRAN API)
 │
-├── jammer.py                  ← 7-mode jammer (NR-timing-aware: pss/pdcch/dmrs/...)
 ├── influx_logger.py           ← Async InfluxDB KPI + detection event logger
 │
 ├── labeler_rapp.py            ← [TO DO] Non-RT RIC rApp: GMM auto-labeling (Rahman et al.)
 ├── training_manager_rapp.py   ← [TO DO] Non-RT RIC rApp: ClearML lifecycle (Rahman et al.)
 │
-├── pipeline_runner.py         ← LEGACY: standalone raw-IQ runner (kept for reference)
-└── ue_transmitter.py          ← LEGACY: raw USRP TX (replaced by srsUE)
+└── tools/
+    ├── jammer.py              ← 7-mode jammer (testbed validation tool)
+    └── collect_and_retrain.py ← Manual data collection + Stage1 retraining (dev tool)
 ```
 
 ---
