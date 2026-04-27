@@ -84,88 +84,59 @@ def _ofdm_like(n: int) -> np.ndarray:
     return np.tile(frame, int(np.ceil(n / N_FFT_OFDM)))[:n]
 
 
-def simulate_pss(gain_factor: float = 1.0) -> np.ndarray:
-    """
-    PSS/SSS Jamming — 중앙 6-12 RB에 에너지 집중
-    주파수 도메인: 중앙 서브캐리어만 고출력, 나머지 0
-    → 스펙트로그램에서 주파수축 중앙에 밝은 가로 줄
-    """
-    n = CHUNK
+def _simulate_freq_domain(n: int, gain: float, fill_fn) -> np.ndarray:
+    """주파수 도메인 시뮬레이션 공통 루프: fill_fn(freq_array) 호출 후 IFFT."""
     frames = []
     for _ in range(int(np.ceil(n / N_FFT_OFDM))):
         freq = np.zeros(N_FFT_OFDM, dtype=np.complex64)
-        center = N_FFT_OFDM // 2
-        n_sc   = np.random.randint(72, 145)   # 6-12 RB
-        half   = n_sc // 2
-        start  = center - half
-        end    = start + n_sc
-        freq[start:end] = _awgn(n_sc) * gain_factor * 5.0
-        # 약한 배경 잡음 추가 (현실감)
-        freq += _awgn(N_FFT_OFDM) * gain_factor * 0.05
+        fill_fn(freq, gain)
+        freq += _awgn(N_FFT_OFDM) * gain * 0.05  # 배경 잡음
         frames.append(np.fft.ifft(freq).astype(np.complex64))
     return np.concatenate(frames)[:n]
 
 
-def simulate_pdcch(gain_factor: float = 1.0) -> np.ndarray:
+def simulate_attack(attack_type: str, gain_factor: float = 1.0) -> np.ndarray:
     """
-    PDCCH Jamming — 슬롯 첫 1-3 OFDM 심볼을 광대역으로 재밍
-    시간 도메인: 슬롯(0.5ms) 시작 시 짧은 광대역 버스트, 나머지 조용
-    → 스펙트로그램에서 주기적 수직 줄무늬
+    Protocol-Aware I/Q 시뮬레이션 (PSS/SSS, PDCCH, DMRS, Generic Deceptive).
     """
     n = CHUNK
-    sig = np.zeros(n, dtype=np.complex64)
-    # 약한 배경 잡음
-    sig += _awgn(n) * gain_factor * 0.03
 
-    # 5G NR 슬롯: 0.5ms @ 30kHz SCS → samples_per_slot
-    samples_per_slot   = int(RATE * 0.0005)   # 10,000 samples
-    samples_per_symbol = samples_per_slot // 14  # ~714 samples
+    if attack_type == "PSS/SSS":
+        def fill(freq, g):
+            c = N_FFT_OFDM // 2
+            n_sc = np.random.randint(72, 145)
+            half = n_sc // 2
+            freq[c - half: c - half + n_sc] = _awgn(n_sc) * g * 5.0
+        return _simulate_freq_domain(n, gain_factor, fill)
 
-    n_coreset_symbols = np.random.randint(1, 4)   # 1-3 심볼
+    elif attack_type == "DMRS":
+        comb = np.random.choice([4, 6])
+        offset = np.random.randint(0, comb)
+        def fill(freq, g):
+            idx = np.arange(offset, N_FFT_OFDM, comb)
+            freq[idx] = _awgn(len(idx)) * g * 5.0
+        return _simulate_freq_domain(n, gain_factor, fill)
 
-    for slot_start in range(0, n, samples_per_slot):
-        burst_len = samples_per_symbol * n_coreset_symbols
-        burst_end = min(slot_start + burst_len, n)
-        actual_len = burst_end - slot_start
-        if actual_len > 0:
-            # 광대역 버스트 (full-band OFDM)
-            burst_frames = []
-            for _ in range(n_coreset_symbols):
-                burst_frames.append(
-                    np.fft.ifft(_awgn(N_FFT_OFDM)).astype(np.complex64) * gain_factor * 4.0
-                )
-            burst = np.concatenate(burst_frames)[:actual_len]
-            sig[slot_start:burst_end] = burst
+    elif attack_type == "PDCCH":
+        sig = _awgn(n) * gain_factor * 0.03
+        sps = int(RATE * 0.0005)          # samples per slot
+        sym_len = sps // 14               # samples per OFDM symbol
+        n_sym = np.random.randint(1, 4)   # 1-3 CORESET symbols
+        for start in range(0, n, sps):
+            end = min(start + sym_len * n_sym, n)
+            if end > start:
+                sig[start:end] = _ofdm_like(end - start) * gain_factor * 4.0
+        return sig
 
-    return sig
-
-
-def simulate_dmrs(gain_factor: float = 1.0) -> np.ndarray:
-    """
-    DMRS Jamming — 빗살(comb) 패턴: 매 N번째 서브캐리어에만 에너지
-    → 스펙트로그램에서 주파수축 등간격 가로 줄
-    """
-    n = CHUNK
-    frames = []
-    comb_spacing = np.random.choice([4, 6])   # Type 1 (comb-4) or Type 2 (comb-6)
-    offset = np.random.randint(0, comb_spacing)
-
-    for _ in range(int(np.ceil(n / N_FFT_OFDM))):
-        freq = np.zeros(N_FFT_OFDM, dtype=np.complex64)
-        pilot_indices = np.arange(offset, N_FFT_OFDM, comb_spacing)
-        freq[pilot_indices] = _awgn(len(pilot_indices)) * gain_factor * 5.0
-        # 약한 배경 잡음
-        freq += _awgn(N_FFT_OFDM) * gain_factor * 0.05
-        frames.append(np.fft.ifft(freq).astype(np.complex64))
-    return np.concatenate(frames)[:n]
+    else:  # Generic Deceptive
+        return _ofdm_like(n) * gain_factor
 
 
-def simulate_generic_deceptive(gain_factor: float = 1.0) -> np.ndarray:
-    """
-    Generic Deceptive — 전 대역 OFDM 위장 (특정 채널 타겟 없음)
-    → 스펙트로그램에서 전 주파수 대역에 걸친 균일한 구조
-    """
-    return _ofdm_like(CHUNK) * gain_factor
+# Backward-compatible aliases
+simulate_pss = lambda gf=1.0: simulate_attack("PSS/SSS", gf)
+simulate_pdcch = lambda gf=1.0: simulate_attack("PDCCH", gf)
+simulate_dmrs = lambda gf=1.0: simulate_attack("DMRS", gf)
+simulate_generic_deceptive = lambda gf=1.0: simulate_attack("Generic Deceptive", gf)
 
 
 SIMULATORS = {

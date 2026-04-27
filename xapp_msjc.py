@@ -13,7 +13,6 @@ FlexRIC E2SM-KPM 기반 재밍 탐지 및 분류
 
 FlexRIC 미연결 시:
   - MockFlexRIC: 합성 KPI 이벤트를 100ms 간격으로 재생
-  - 30초 후 자동 fallback: IQSnapshot + legacy pipeline_runner 루프
 
 실행:
   python3 xapp_msjc.py [--no-stage2] [--no-stage3] [--no-rc] [--mock-ric]
@@ -280,7 +279,6 @@ class MSJCxApp:
         self._influx_logger = None
         self._ric = None
         self._iq_snap = None
-        self._in_fallback = False
 
     # ── 모델 로드 ──────────────────────────────
     def _load_models(self):
@@ -580,60 +578,6 @@ class MSJCxApp:
         if self._ric is not None:
             self._ric.send_rc_control(e2_node_id, action)
 
-    # ── Fallback (legacy IQ 모드) ──────────────
-    def _run_fallback_mode(self):
-        print(f"[{_ts()}] [FALLBACK] E2 unavailable — switching to raw-IQ mode")
-        self._in_fallback = True
-
-        usrp_addr = (self._cfg.get("network", {})
-                         .get("nodes", {})
-                         .get("instance2_classifier", {})
-                         .get("usrp", {})
-                         .get("ip", "192.168.116.2"))
-
-        try:
-            import uhd
-            usrp = uhd.usrp.MultiUSRP(f"addr={usrp_addr}")
-            usrp.set_rx_rate(20e6)
-            usrp.set_rx_freq(uhd.libpyuhd.types.tune_request(3.5e9))
-            usrp.set_rx_gain(45)
-            usrp.set_rx_antenna("RX2", 0)
-            streamer = usrp.get_rx_stream(uhd.usrp.StreamArgs("fc32", "sc16"))
-            cmd = uhd.types.StreamCMD(uhd.types.StreamMode.start_cont)
-            cmd.stream_now = True
-            streamer.issue_stream_cmd(cmd)
-
-            CHUNK = 128 * 128
-            buf  = np.zeros((1, CHUNK), dtype=np.complex64)
-            meta = uhd.types.RXMetadata()
-
-            while not self._stop_evt.is_set():
-                n = streamer.recv(buf, meta)
-                if meta.error_code != uhd.types.RXMetadataErrorCode.none or n == 0:
-                    continue
-                iq = buf[0].copy()
-                self._on_kpm_indication({"e2_node_id": "fallback-iq"}, {})
-                # Directly classify IQ
-                with self._lock:
-                    from stage1_mlp import classify as s1_classify
-                    label, conf, _ = s1_classify(
-                        iq, self._s1_model, self._s1_scaler, self._s1_device)
-                verdict = {"s1_label": label, "s1_confidence": conf,
-                           "final_verdict": "CLEAN" if label == "Normal" else "ATTACK_CONFIRMED"}
-                print(f"[{_ts()}] [FALLBACK] S1:{label}({conf:.2f}) | {verdict['final_verdict']}")
-
-            cmd_stop = uhd.types.StreamCMD(uhd.types.StreamMode.stop_cont)
-            streamer.issue_stream_cmd(cmd_stop)
-
-        except Exception as e:
-            print(f"[{_ts()}] [FALLBACK] IQ 스트리밍 실패: {e}")
-            print(f"[{_ts()}] [FALLBACK] USRP 없음 — MockFlexRIC fallback으로 전환")
-            mock = MockFlexRIC(self._report_period)
-            mock.subscribe_kpm(self._on_kpm_indication)
-            mock.start()
-            self._stop_evt.wait()
-            mock.stop()
-
     # ── 통계 출력 ──────────────────────────────
     def _print_stats(self):
         fn_window = self._stats["fn_window"]
@@ -706,45 +650,27 @@ class MSJCxApp:
             ric.stop()
 
         else:
-            # E2 연결 시도 (300초 타임아웃 후 fallback — gNB 연결에 충분한 시간 부여)
             ric = RealFlexRIC(self._ric_addr, self._ric_port, self._report_period)
             ric.subscribe_kpm(self._on_kpm_indication)
             self._ric = ric
-
-            fallback_thread = None
-
-            def _e2_watchdog():
-                # 300초 동안 실제 KPM 데이터가 없으면 fallback
-                for _ in range(150):  # 2초 간격 × 150 = 300초
-                    time.sleep(2)
-                    if self._in_fallback or self._stop_evt.is_set():
-                        return
-                    if self._stats["total"] > 0:
-                        return  # 실제 데이터 수신 → watchdog 해제
-                if not self._in_fallback and not self._stop_evt.is_set():
-                    print(f"[{_ts()}] [xApp] 300초 내 KPM 수신 없음 — MockFlexRIC fallback")
-                    fallback_t = threading.Thread(
-                        target=self._run_fallback_mode, daemon=True)
-                    fallback_t.start()
-
-            watchdog = threading.Thread(target=_e2_watchdog, daemon=True)
-            watchdog.start()
 
             try:
                 ric.start()  # blocking
             except KeyboardInterrupt:
                 pass
             except Exception as e:
-                print(f"[{_ts()}] [xApp] E2 연결 실패: {e}")
-                if not self._in_fallback:
-                    fallback_thread = threading.Thread(
-                        target=self._run_fallback_mode, daemon=True)
-                    fallback_thread.start()
-                    try:
-                        self._stop_evt.wait()
-                    except KeyboardInterrupt:
-                        pass
-            finally:
+                print(f"[{_ts()}] [xApp] E2 연결 실패: {e} — MockFlexRIC로 전환")
+                ric.stop()
+                mock = MockFlexRIC(self._report_period)
+                mock.subscribe_kpm(self._on_kpm_indication)
+                self._ric = mock
+                mock.start()
+                try:
+                    self._stop_evt.wait()
+                except KeyboardInterrupt:
+                    pass
+                mock.stop()
+            else:
                 ric.stop()
 
         self.stop()

@@ -116,155 +116,37 @@ def extract_from_kpm(kpm_msg: dict) -> np.ndarray:
 # ─────────────────────────────────────────────
 # 2. Synthetic KPI Simulation
 # ─────────────────────────────────────────────
+_ATTACK_PROFILES = {
+    #                   rsrp          rsrq          sinr         bler          nack          tput         cqi          harq
+    "Normal":         [(-70,-85),   (-8,-15),    (15,35),     (0.0,0.05),  (0.0,0.03),  (50,200),    (10,15),     (0.0,0.05)],
+    "Constant":       [(-100,-130), (-28,-40),   (-15,0),     (0.7,1.0),   (0.8,1.0),   (0,3),       (0,2),       (0.8,1.0)],
+    "Deceptive":      [(-78,-95),   (-14,-22),   (3,15),      (0.1,0.4),   (0.05,0.25), (15,60),     (4,9),       (0.1,0.4)],
+    "PSS/SSS":        [(-110,-140), (-30,-43),   (-20,-5),    (0.85,1.0),  (0.9,1.0),   (0,1),       (0,1),       (0.9,1.0)],
+    "PDCCH":          [(-80,-100),  (-15,-25),   (0,12),      (0.6,0.95),  (0.7,0.95),  (0,10),      (2,6),       (0.6,0.9)],
+    "DMRS":           [(-82,-100),  (-14,-24),   (2,14),      (0.3,0.7),   (0.2,0.5),   (5,40),      (3,8),       (0.5,0.85)],
+}
+# Burst/intermittent attacks: (jammed_profile, clean_profile, jam_probability)
+_BURST_PROFILES = {
+    "Random":   ("Random_jam",   "Random_clean",   0.4),
+    "Reactive": ("Reactive_jam", "Reactive_clean",  0.4),
+}
+_ATTACK_PROFILES["Random_jam"]    = [(-95,-115), (-22,-35), (-5,8),   (0.4,0.9),  (0.3,0.8),  (2,30),   (1,6),   (0.5,0.9)]
+_ATTACK_PROFILES["Random_clean"]  = [(-75,-90),  (-10,-18), (10,25),  (0.02,0.15),(0.02,0.1), (30,120), (7,13),  (0.03,0.15)]
+_ATTACK_PROFILES["Reactive_jam"]  = [(-95,-120), (-25,-38), (-10,3),  (0.6,1.0),  (0.7,1.0),  (0,8),    (0,3),   (0.7,1.0)]
+_ATTACK_PROFILES["Reactive_clean"]= [(-72,-88),  (-9,-16),  (12,28),  (0.01,0.08),(0.01,0.05),(40,150), (9,14),  (0.01,0.08)]
+
+
+def _sample_profile(profile: list) -> np.ndarray:
+    return np.array([np.random.uniform(lo, hi) for lo, hi in profile], dtype=np.float32)
+
+
 def simulate_kpi_chunk(label: str) -> np.ndarray:
-    """
-    Generate a synthetic 8-dim KPI feature vector for a given jamming label.
+    """Generate a synthetic 8-dim KPI feature vector for a given jamming label."""
+    if label in _BURST_PROFILES:
+        jam_key, clean_key, prob = _BURST_PROFILES[label]
+        key = jam_key if np.random.rand() < prob else clean_key
+        return _sample_profile(_ATTACK_PROFILES[key])
 
-    Labels:
-      "Normal"     — clean channel, good KPIs
-      "Constant"   — wideband AWGN jammer → all KPIs degraded
-      "Random"     — intermittent bursts → moderate degradation with high variance
-      "Reactive"   — TDD-synchronized jammer → periodic KPI dips
-      "Deceptive"  — OFDM-mimicking jammer → subtle CQI/SINR degradation
-      "PSS/SSS"    — sync channel jammer → CQI→0, RSRP drop, cell search fails
-      "PDCCH"      — control channel jammer → high BLER, NACK spike
-      "DMRS"       — pilot jammer → HARQ spikes, moderate SINR drop
-
-    Returns:
-        np.ndarray of shape (8,), dtype float32
-    """
-    if label == "Normal":
-        return np.array([
-            np.random.uniform(-70, -85),     # rsrp: typical good range
-            np.random.uniform(-8, -15),      # rsrq: normal quality
-            np.random.uniform(15, 35),       # sinr: good link
-            np.random.uniform(0.0, 0.05),    # bler: very low
-            np.random.uniform(0.0, 0.03),    # uci_nack: very low
-            np.random.uniform(50, 200),      # dl_tput: healthy throughput
-            np.random.uniform(10, 15),       # cqi: high quality
-            np.random.uniform(0.0, 0.05),    # harq_retx: minimal
-        ], dtype=np.float32)
-
-    elif label == "Constant":
-        return np.array([
-            np.random.uniform(-100, -130),   # rsrp: severe drop
-            np.random.uniform(-28, -40),     # rsrq: terrible
-            np.random.uniform(-15, 0),       # sinr: negative
-            np.random.uniform(0.7, 1.0),     # bler: very high
-            np.random.uniform(0.8, 1.0),     # uci_nack: almost all NACK
-            np.random.uniform(0, 3),         # dl_tput: near zero
-            np.random.uniform(0, 2),         # cqi: minimum
-            np.random.uniform(0.8, 1.0),     # harq_retx: maximum
-        ], dtype=np.float32)
-
-    elif label == "Random":
-        # Intermittent bursts → high variance, moderate average degradation
-        burst_on = np.random.rand() < 0.4
-        if burst_on:
-            return np.array([
-                np.random.uniform(-95, -115),
-                np.random.uniform(-22, -35),
-                np.random.uniform(-5, 8),
-                np.random.uniform(0.4, 0.9),
-                np.random.uniform(0.3, 0.8),
-                np.random.uniform(2, 30),
-                np.random.uniform(1, 6),
-                np.random.uniform(0.5, 0.9),
-            ], dtype=np.float32)
-        else:
-            return np.array([
-                np.random.uniform(-75, -90),
-                np.random.uniform(-10, -18),
-                np.random.uniform(10, 25),
-                np.random.uniform(0.02, 0.15),
-                np.random.uniform(0.02, 0.1),
-                np.random.uniform(30, 120),
-                np.random.uniform(7, 13),
-                np.random.uniform(0.03, 0.15),
-            ], dtype=np.float32)
-
-    elif label == "Reactive":
-        # TDD-synchronized — jams during specific slots
-        # Simulates periodic degradation: ~40% of the time is jammed
-        jammed_slot = np.random.rand() < 0.4
-        if jammed_slot:
-            return np.array([
-                np.random.uniform(-95, -120),
-                np.random.uniform(-25, -38),
-                np.random.uniform(-10, 3),
-                np.random.uniform(0.6, 1.0),
-                np.random.uniform(0.7, 1.0),
-                np.random.uniform(0, 8),
-                np.random.uniform(0, 3),
-                np.random.uniform(0.7, 1.0),
-            ], dtype=np.float32)
-        else:
-            return np.array([
-                np.random.uniform(-72, -88),
-                np.random.uniform(-9, -16),
-                np.random.uniform(12, 28),
-                np.random.uniform(0.01, 0.08),
-                np.random.uniform(0.01, 0.05),
-                np.random.uniform(40, 150),
-                np.random.uniform(9, 14),
-                np.random.uniform(0.01, 0.08),
-            ], dtype=np.float32)
-
-    elif label == "Deceptive":
-        # OFDM-mimicking: looks like legitimate signal but with subtle anomalies
-        # SINR is moderately degraded, CQI drops, but RSRP/RSRQ look semi-normal
-        return np.array([
-            np.random.uniform(-78, -95),     # rsrp: slight drop (jammer adds power)
-            np.random.uniform(-14, -22),     # rsrq: moderate degradation
-            np.random.uniform(3, 15),        # sinr: reduced but not crashed
-            np.random.uniform(0.1, 0.4),     # bler: elevated
-            np.random.uniform(0.05, 0.25),   # uci_nack: somewhat elevated
-            np.random.uniform(15, 60),       # dl_tput: reduced
-            np.random.uniform(4, 9),         # cqi: mid-range drop
-            np.random.uniform(0.1, 0.4),     # harq_retx: elevated
-        ], dtype=np.float32)
-
-    elif label == "PSS/SSS":
-        # Sync channel jamming → UE can't find/maintain cell
-        # CQI → 0, RSRP erratic, throughput zero, high BLER
-        return np.array([
-            np.random.uniform(-110, -140),   # rsrp: can't decode PSS → very low
-            np.random.uniform(-30, -43),     # rsrq: worst case
-            np.random.uniform(-20, -5),      # sinr: very poor in sync band
-            np.random.uniform(0.85, 1.0),    # bler: nearly total
-            np.random.uniform(0.9, 1.0),     # uci_nack: all NACK (can't schedule)
-            np.random.uniform(0, 1),         # dl_tput: effectively zero
-            np.random.uniform(0, 1),         # cqi: zero (can't measure channel)
-            np.random.uniform(0.9, 1.0),     # harq_retx: max
-        ], dtype=np.float32)
-
-    elif label == "PDCCH":
-        # Control channel jammer → can't decode DCI → scheduling destroyed
-        # BLER spikes, NACK spikes, but RSRP may look OK (jammer targets CORESET only)
-        return np.array([
-            np.random.uniform(-80, -100),    # rsrp: moderate (jammer narrowband)
-            np.random.uniform(-15, -25),     # rsrq: degraded
-            np.random.uniform(0, 12),        # sinr: reduced in CORESET region
-            np.random.uniform(0.6, 0.95),    # bler: very high (DCI decode fails)
-            np.random.uniform(0.7, 0.95),    # uci_nack: high (no grants decoded)
-            np.random.uniform(0, 10),        # dl_tput: near zero (no scheduling)
-            np.random.uniform(2, 6),         # cqi: low but not zero (data symbols OK)
-            np.random.uniform(0.6, 0.9),     # harq_retx: high
-        ], dtype=np.float32)
-
-    elif label == "DMRS":
-        # Pilot signal jammer → channel estimation ruined
-        # HARQ retransmission spikes, SINR drops moderately, CQI unreliable
-        return np.array([
-            np.random.uniform(-82, -100),    # rsrp: moderate degradation
-            np.random.uniform(-14, -24),     # rsrq: degraded
-            np.random.uniform(2, 14),        # sinr: moderate drop
-            np.random.uniform(0.3, 0.7),     # bler: elevated (bad channel est)
-            np.random.uniform(0.2, 0.5),     # uci_nack: moderate
-            np.random.uniform(5, 40),        # dl_tput: reduced
-            np.random.uniform(3, 8),         # cqi: unreliable mid-range
-            np.random.uniform(0.5, 0.85),    # harq_retx: high (retransmit everything)
-        ], dtype=np.float32)
-
-    else:
+    if label not in _ATTACK_PROFILES:
         raise ValueError(f"Unknown KPI simulation label: {label}")
+    return _sample_profile(_ATTACK_PROFILES[label])
