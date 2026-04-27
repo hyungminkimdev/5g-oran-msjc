@@ -164,6 +164,9 @@ Stage 3 MobileNetV3 still uses **2D spectrograms**, but sourced from:
 ├── jammer.py                  ← 7-mode jammer (NR-timing-aware: pss/pdcch/dmrs/...)
 ├── influx_logger.py           ← Async InfluxDB KPI + detection event logger
 │
+├── labeler_rapp.py            ← [TO DO] Non-RT RIC rApp: GMM auto-labeling (Rahman et al.)
+├── training_manager_rapp.py   ← [TO DO] Non-RT RIC rApp: ClearML lifecycle (Rahman et al.)
+│
 ├── pipeline_runner.py         ← LEGACY: standalone raw-IQ runner (kept for reference)
 └── ue_transmitter.py          ← LEGACY: raw USRP TX (replaced by srsUE)
 ```
@@ -176,7 +179,7 @@ Stage 3 MobileNetV3 still uses **2D spectrograms**, but sourced from:
 |---|---|---|---|
 | **E2** | gNB ↔ Near-RT RIC | SCTP / ASN.1 | KPM subscription + RC control |
 | **O1** | Near-RT RIC ↔ SMO | NETCONF/YANG | Configuration & fault management |
-| **A1** | Non-RT RIC ↔ Near-RT RIC | HTTP/JSON | Policy injection (future) |
+| **A1** | Non-RT RIC ↔ Near-RT RIC | HTTP/JSON | Model update notification (Training Manager rApp → xApp) |
 | **N2** | gNB ↔ AMF | NGAP / SCTP | UE registration, handover |
 | **N3** | UPF ↔ gNB | GTP-U / UDP | User-plane data |
 
@@ -260,12 +263,104 @@ python3 pipeline_runner.py [--no-stage2] [--no-stage3]
 
 ---
 
-## 10. ClearML MLOps Integration
+## 10. Closed-Loop MLOps: rApps + ClearML (Rahman et al. 2025)
 
-All three model training runs must log to ClearML:
+The SAJD (Self-Adaptive Jammer Detection) closed-loop from Rahman et al. is adapted into our MSJC pipeline.
+This adds two **Non-RT RIC rApps** that automate the full label → train → deploy cycle without human intervention.
+
+### 10.1 Closed-Loop Architecture
+
+```
+                         Non-RT RIC
+          ┌──────────────────────────────────────────────┐
+          │                                              │
+          │  ┌─────────────────┐   ┌──────────────────┐ │
+          │  │ Labeler rApp     │   │ Training Manager │ │
+          │  │                 │   │ rApp             │ │
+          │  │ • fetch KPIs    │   │                  │ │
+          │  │   from InfluxDB │   │ • monitor model  │ │
+          │  │ • smooth + ARC  │   │   accuracy       │ │
+          │  │ • GMM clustering│──▶│ • clone ClearML  │ │
+          │  │ • auto-annotate │   │   template task  │ │
+          │  │ • write labels  │   │ • enqueue train  │ │
+          │  │   back to DB    │   │ • wait completion│ │
+          │  └─────────────────┘   │ • notify xApp    │ │
+          │                        │   via A1 (model  │ │
+          │                        │   URL/task ID)   │ │
+          │                        └────────┬─────────┘ │
+          └─────────────────────────────────┼───────────┘
+                                            │ A1 (model update)
+                     ┌──────────────────────▼───────────────┐
+                     │  Near-RT RIC                          │
+                     │  ┌──────────────────────────────┐    │
+                     │  │ MSJC xApp (xapp_msjc.py)      │    │
+                     │  │ • E2SM-KPM → 8-dim features   │    │
+                     │  │ • Stage 1/2/3 inference       │    │
+                     │  │ • hot-reload model on A1 msg  │    │
+                     │  │ • log results → InfluxDB      │    │
+                     │  └──────────────────────────────┘    │
+                     └──────────────────────────────────────┘
+```
+
+### 10.2 Labeler rApp (`labeler_rapp.py` — to be implemented)
+
+Automatic unsupervised annotation of raw KPI samples, adapted from Rahman et al. Section III-A.
+
+| Step | Action | Detail |
+|------|--------|--------|
+| 1 | Fetch | Pull raw KPIs (SINR, BLER, etc.) from InfluxDB in sliding batches (30 samples) |
+| 2 | Smooth | Moving average (window W) to remove fluctuations |
+| 3 | Normalize | Standard scaling (mean=0, std=1) |
+| 4 | Detect drift | Compute ARC (Average Rate of Change); if \|ARC\| > τ (threshold), retrain GMM |
+| 5 | Cluster | GMM soft clustering → binary labels (normal / attack) |
+| 6 | Write back | Annotated samples → InfluxDB `labeled_kpis` measurement |
+
+**Key design choices for MSJC adaptation:**
+- Rahman uses 4 KPIs (UL SNR, UL MCS, UL bitrate, UL BLER); we extend to **8 KPIs** per our feature vector
+- Rahman uses binary labels; we extend GMM to **5-class** (or start binary + Stage 1 refines to 5-class)
+- τ threshold tuned empirically per our testbed conditions
+
+### 10.3 Training Manager rApp (`training_manager_rapp.py` — to be implemented)
+
+Orchestrates the full ML lifecycle, adapted from Rahman et al. Section III-B.
+
+**Responsibilities:**
+1. **Initial training:** When no pretrained model exists, fetch labeled data → train → store in ClearML registry
+2. **Accuracy monitoring:** Track xApp inference accuracy via InfluxDB; if accuracy < threshold (30% in Rahman, configurable) → trigger retrain
+3. **Periodic retraining:** Scheduled retraining (e.g., every 6 hours) to handle gradual drift
+4. **ClearML orchestration:**
+   - Clone template ClearML task
+   - Submit to ClearML agent queue
+   - Monitor task completion
+   - Retrieve trained model URL from ClearML registry
+5. **Model deployment:** Notify xApp via A1-like interface (HTTP POST with model URL/task ID)
+6. **Lineage tracking:** Full traceability — which data, which labels, which training run produced which model
+
+### 10.4 ClearML Integration (updated)
+
+All ML components log to ClearML:
+
+| Component | ClearML Integration | Status |
+|-----------|-------------------|--------|
+| Stage 1 MLP | `Task.init()`, artifact upload | **Implemented** |
+| Stage 2 KSVM | `Task.init()`, artifact upload | **Implemented** |
+| Stage 3 MobileNetV3 | `Task.init()`, artifact upload | **To do** |
+| xApp FN trigger | `Task.create()` + `Task.enqueue()` | **Implemented** |
+| Training Manager rApp | Clone template, enqueue, monitor | **To do** |
+| Labeler rApp | Log labeling stats | **To do** |
+
 - **Task name format:** `msjc-stage{1,2,3}-{timestamp}`
 - **Tracked artifacts:** model weights (`.pth`, `.pkl`), scaler, confusion matrix, per-class accuracy
-- **Retraining trigger:** When MSJC xApp FN rate > 5% over a 1-hour window → ClearML retraining task auto-queued
+- **Retraining triggers:** FN rate > 5% (xApp) OR accuracy < 30% (Training Manager) OR periodic schedule
+
+### 10.5 A1 Interface (Non-RT RIC ↔ Near-RT RIC)
+
+| Direction | Message | Payload |
+|-----------|---------|---------|
+| Training Manager → xApp | `MODEL_UPDATE` | `{ model_url, task_id, stage, accuracy }` |
+| xApp → Training Manager | `ACCURACY_REPORT` | `{ fn_rate, accuracy, sample_count, timestamp }` |
+
+**Implementation:** HTTP REST (A1-like); full O-RAN A1 AP compliance is future work.
 
 ---
 
@@ -282,10 +377,21 @@ Fields:  rsrp, rsrq, sinr, bler, uci_nack_rate, dl_throughput_mbps,
 
 ---
 
-## 12. Paper Reference
+## 12. Paper References
 
-Hachimi et al. (2020) — "Multi-stage Jamming Attacks Detection using Deep Learning Combined with Kernelized Support Vector Machine in 5G Wireless Network."
+### 12.1 Hachimi et al. (2020)
+"Multi-stage Jamming Attacks Detection using Deep Learning Combined with Kernelized Support Vector Machine in 5G Wireless Network."
 - Section III-A: KSVM for physical jamming signatures
 - Section III-B: MLP for fast binary/multi-class detection
 - Section IV: MobileNetV3 for spectrogram-based protocol-aware classification
-- **Note:** Original paper uses simulated data. This project extends it to a live 5G O-RAN testbed with real E2SM-KPM KPIs.
+- **Contribution to this project:** 3-stage MSJC classification pipeline (Stage 1 MLP → Stage 2 KSVM → Stage 3 MobileNetV3)
+- **Limitation:** Simulated data only, no O-RAN integration, no adaptive retraining
+
+### 12.2 Rahman et al. (2025)
+"SAJD: Self-Adaptive Jamming Attack Detection in AI/ML Integrated 5G O-RAN Networks." (arXiv:2511.17519)
+- Section III-A: **Labeler rApp** — GMM-based unsupervised auto-labeling of KPIs (smooth → ARC → GMM clustering)
+- Section III-B: **Training Manager rApp** — ClearML-driven model lifecycle (train → monitor accuracy → retrain → deploy via A1)
+- Section III-C: **Interference Detection xApp** — real-time inference with A1-based hot model reload
+- Section III-D: **ClearML Training Host** — production-grade MLOps (task queue, model registry, experiment tracking)
+- **Contribution to this project:** Closed-loop MLOps architecture (Labeler rApp + Training Manager rApp + A1 interface)
+- **Key adaptation:** Rahman uses binary detection (interference/no-interference); we extend to 5-class + 3-stage cascade from Hachimi
