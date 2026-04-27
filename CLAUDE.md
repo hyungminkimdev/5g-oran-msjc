@@ -1,5 +1,17 @@
 # MSJC Project: Hierarchical Jamming Classification xApp on 5G O-RAN (srsRAN + FlexRIC)
 
+## 0. Development Principles (석사 논문 프로젝트)
+
+이 프로젝트는 석사 논문이다. **실행되는 구현이 1순위**, 완벽한 코드는 필요 없다.
+
+1. **"돌아가면 된다"** — 동작하는 최소 구현을 먼저 만들고, 나중에 개선. 과도한 추상화, 디자인 패턴, 래퍼 클래스 금지.
+2. **새 파일/클래스 만들지 않기** — 기존 파일에 함수를 추가하는 것을 우선. 유틸리티 모듈, 베이스 클래스, 팩토리 패턴 등 불필요.
+3. **에러 핸들링 최소화** — 핵심 경로만 처리. 모든 엣지 케이스를 다 잡으려 하지 않기.
+4. **설정(config) 늘리지 않기** — 하드코딩으로 충분하면 하드코딩. config.yaml에 키 추가하기 전에 정말 필요한지 확인.
+5. **논문 결과에 직접 기여하는 코드만 작성** — 시각화, 로깅, 모니터링은 최소한으로. 논문 Figure/Table에 안 들어갈 코드는 쓰지 않기.
+6. **핵심 파일 7개만 유지** — xapp_msjc.py, stage{1,2,3}, kpi_feature_extractor.py, influx_logger.py, iq_snapshot.py. 이 외에 새 .py 파일을 만들어야 하면 정말 필요한지 재고.
+7. **한국어 주석 OK** — 코드 주석/출력은 한국어 사용 가능.
+
 ## 1. Project Context & Goal
 
 This project implements the MSJC (Multi-Stage Jamming Classification) framework as a **real O-RAN xApp** running on the CCI xG Testbed.
