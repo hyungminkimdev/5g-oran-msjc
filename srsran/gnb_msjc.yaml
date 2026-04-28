@@ -19,7 +19,7 @@ ru_sdr:
   device_driver: uhd
   device_args: addr=192.168.116.2,num_send_frames=512,num_recv_frames=512
   srate: 11.52                            # MHz — required by srsRAN for 10 MHz channel BW
-  tx_gain: 31.5                           # UBX-160 max TX gain (range 0-31.5)
+  tx_gain: 20                              # RF safety: max 20 dB on shared testbed
   rx_gain: 31.5                          # UBX-160 max RX gain (range 0-31.5)
   otw_format: sc16                        # HG FPGA image: sc12 not supported, use sc16
   expert_cfg:
@@ -62,14 +62,14 @@ cell_cfg:
     nof_ul_symbols: 4
 
 e2:
-  enable_du_e2: true                      # enable E2 agent in the DU
+  enable_du_e2: false                     # disabled — FlexRIC not running yet, avoid segfault
   addr: 127.0.0.1                         # FlexRIC Near-RT RIC address
   port: 36421                             # E2AP SCTP port (FlexRIC default)
   e2sm_kpm_enabled: true                  # enable KPM service model
   e2sm_rc_enabled: true                   # enable RC service model
 
 expert_phy:
-  max_proc_delay: 4                       # slots — original value when PRACH was detected
+  max_proc_delay: 5                       # slots — give more time for PHY processing in VM
 
 expert_execution:
   threads:

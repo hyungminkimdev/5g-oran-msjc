@@ -133,10 +133,10 @@ def simulate_attack(attack_type: str, gain_factor: float = 1.0) -> np.ndarray:
 
 
 # Backward-compatible aliases
-simulate_pss = lambda gf=1.0: simulate_attack("PSS/SSS", gf)
-simulate_pdcch = lambda gf=1.0: simulate_attack("PDCCH", gf)
-simulate_dmrs = lambda gf=1.0: simulate_attack("DMRS", gf)
-simulate_generic_deceptive = lambda gf=1.0: simulate_attack("Generic Deceptive", gf)
+simulate_pss = lambda gain_factor=1.0: simulate_attack("PSS/SSS", gain_factor)
+simulate_pdcch = lambda gain_factor=1.0: simulate_attack("PDCCH", gain_factor)
+simulate_dmrs = lambda gain_factor=1.0: simulate_attack("DMRS", gain_factor)
+simulate_generic_deceptive = lambda gain_factor=1.0: simulate_attack("Generic Deceptive", gain_factor)
 
 
 SIMULATORS = {
