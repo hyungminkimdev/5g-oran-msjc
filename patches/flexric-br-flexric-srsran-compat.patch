@@ -1,0 +1,81 @@
+diff --git a/src/lib/e2ap/v1_01/e2ap_types/common/e2ap_global_node_id.c b/src/lib/e2ap/v1_01/e2ap_types/common/e2ap_global_node_id.c
+index 5a7362018..6332599c6 100644
+--- a/src/lib/e2ap/v1_01/e2ap_types/common/e2ap_global_node_id.c
++++ b/src/lib/e2ap/v1_01/e2ap_types/common/e2ap_global_node_id.c
+@@ -46,7 +46,7 @@ bool eq_global_e2_node_id(const global_e2_node_id_t* m0, const global_e2_node_id
+   // This is an abuse but the standard does not define how to
+   // differentiate between ngran_gNB_CU and ngran_gNB
+   if (E2AP_NODE_IS_CU(m0->type) || E2AP_NODE_IS_CUUP(m0->type) || E2AP_NODE_IS_DU(m0->type)) {
+-    assert(m0->cu_du_id != NULL && m1->cu_du_id != NULL );
++    if(m0->cu_du_id == NULL && m1->cu_du_id == NULL) return true; if(m0->cu_du_id == NULL || m1->cu_du_id == NULL) return false;
+     if(*m0->cu_du_id != *m1->cu_du_id)
+       return false;
+   }
+@@ -123,7 +123,7 @@ int cmp_global_e2_node_id(const global_e2_node_id_t* m0, const global_e2_node_id
+   // This is an abuse but the standard does not define how to
+   // differentiate between ngran_gNB_CU and ngran_gNB
+   if (E2AP_NODE_IS_CU(m0->type) || E2AP_NODE_IS_CUUP(m0->type) || E2AP_NODE_IS_DU(m0->type) ) {
+-    assert(m0->cu_du_id != NULL && m1->cu_du_id != NULL);
++    if(m0->cu_du_id == NULL && m1->cu_du_id == NULL) return 0; if(m0->cu_du_id == NULL || m1->cu_du_id == NULL) return m0->cu_du_id == NULL ? -1 : 1;
+     if (*m0->cu_du_id < *m1->cu_du_id)
+       return -1;
+     else if(*m0->cu_du_id > *m1->cu_du_id)
+diff --git a/src/lib/e2ap/v2_03/e2ap_types/common/e2ap_global_node_id.c b/src/lib/e2ap/v2_03/e2ap_types/common/e2ap_global_node_id.c
+index 6c2f20531..13fa27db5 100644
+--- a/src/lib/e2ap/v2_03/e2ap_types/common/e2ap_global_node_id.c
++++ b/src/lib/e2ap/v2_03/e2ap_types/common/e2ap_global_node_id.c
+@@ -46,7 +46,7 @@ bool eq_global_e2_node_id(const global_e2_node_id_t* m0, const global_e2_node_id
+   // This is an abuse but the standard does not define how to
+   // differentiate between ngran_gNB_CU and ngran_gNB
+   if (E2AP_NODE_IS_CU(m0->type) || E2AP_NODE_IS_CUUP(m0->type) || E2AP_NODE_IS_DU(m0->type)) {
+-    assert(m0->cu_du_id != NULL && m1->cu_du_id != NULL );
++    if(m0->cu_du_id == NULL && m1->cu_du_id == NULL) return true; if(m0->cu_du_id == NULL || m1->cu_du_id == NULL) return false;
+     if(*m0->cu_du_id != *m1->cu_du_id)
+       return false;
+   }
+@@ -128,7 +128,7 @@ int cmp_global_e2_node_id(const global_e2_node_id_t* m0, const global_e2_node_id
+   // This is an abuse but the standard does not define how to
+   // differentiate between ngran_gNB_CU and ngran_gNB
+   if (E2AP_NODE_IS_CU(m0->type) || E2AP_NODE_IS_CUUP(m0->type) || E2AP_NODE_IS_DU(m0->type) ) {
+-    assert(m0->cu_du_id != NULL && m1->cu_du_id != NULL);
++    if(m0->cu_du_id == NULL && m1->cu_du_id == NULL) return 0; if(m0->cu_du_id == NULL || m1->cu_du_id == NULL) return m0->cu_du_id == NULL ? -1 : 1;
+     if (*m0->cu_du_id < *m1->cu_du_id)
+       return -1;
+     else if(*m0->cu_du_id > *m1->cu_du_id)
+diff --git a/src/lib/e2ap/v3_01/e2ap_types/common/e2ap_global_node_id.c b/src/lib/e2ap/v3_01/e2ap_types/common/e2ap_global_node_id.c
+index 84c02b64e..c56edf518 100644
+--- a/src/lib/e2ap/v3_01/e2ap_types/common/e2ap_global_node_id.c
++++ b/src/lib/e2ap/v3_01/e2ap_types/common/e2ap_global_node_id.c
+@@ -47,7 +47,7 @@ bool eq_global_e2_node_id(const global_e2_node_id_t* m0, const global_e2_node_id
+   // differentiate between ngran_gNB_CU and ngran_gNB
+   // We interpret that a CU and CUCP are gnb + e2ap_node_component_config_add_t;
+   if (E2AP_NODE_IS_CU(m0->type) || E2AP_NODE_IS_CUUP(m0->type) || E2AP_NODE_IS_DU(m0->type)) {
+-    assert(m0->cu_du_id != NULL && m1->cu_du_id != NULL ); 
++    if(m0->cu_du_id == NULL && m1->cu_du_id == NULL) return true; if(m0->cu_du_id == NULL || m1->cu_du_id == NULL) return false; 
+     if(*m0->cu_du_id != *m1->cu_du_id)
+       return false;
+   }
+@@ -123,7 +123,7 @@ int cmp_global_e2_node_id(const global_e2_node_id_t* m0, const global_e2_node_id
+   // This is an abuse but the standard does not define how to
+   // differentiate between ngran_gNB_CU and ngran_gNB
+   if (E2AP_NODE_IS_CU(m0->type) || E2AP_NODE_IS_CUUP(m0->type) || E2AP_NODE_IS_DU(m0->type) ) {
+-    assert(m0->cu_du_id != NULL && m1->cu_du_id != NULL);
++    if(m0->cu_du_id == NULL && m1->cu_du_id == NULL) return 0; if(m0->cu_du_id == NULL || m1->cu_du_id == NULL) return m0->cu_du_id == NULL ? -1 : 1;
+     if (*m0->cu_du_id < *m1->cu_du_id)
+       return -1;
+     else if(*m0->cu_du_id > *m1->cu_du_id)
+diff --git a/src/xApp/e42_xapp_api.c b/src/xApp/e42_xapp_api.c
+index a318d7418..a85a69700 100644
+--- a/src/xApp/e42_xapp_api.c
++++ b/src/xApp/e42_xapp_api.c
+@@ -164,8 +164,8 @@ sm_ans_xapp_t report_sm_xapp_api(global_e2_node_id_t* id, uint32_t rf_id, void*
+   assert(id != NULL);
+   assert(data != NULL);
+ 
+-  assert(valid_global_e2_node(id, &xapp->e2_nodes) == true);
+-  assert(valid_sm_id(id, rf_id)  == true);
++  if(!valid_global_e2_node(id, &xapp->e2_nodes)) { printf("[WARN] E2 node not found in registered nodes, proceeding anyway\n"); }
++  if(!valid_sm_id(id, rf_id)) { printf("[WARN] SM ID %u not found for E2 node, proceeding anyway\n", rf_id); }
+ 
+   return report_sm_sync_xapp(xapp, id, rf_id, data, handler);
+ }
