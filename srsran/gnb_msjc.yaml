@@ -10,14 +10,14 @@ cu_up:
     - bind_addr: 127.0.0.2
 ru_sdr:
   device_driver: uhd
-  device_args: type=x300,addr=192.168.116.2
-  srate: 11.52
+  device_args: addr=192.168.116.2,num_send_frames=512,num_recv_frames=512
+  srate: 23.04
   tx_gain: 20
   rx_gain: 37.5
 cell_cfg:
   dl_arfcn: 368500
   band: 3
-  channel_bandwidth_MHz: 10
+  channel_bandwidth_MHz: 20
   common_scs: 15
   nof_antennas_dl: 1
   nof_antennas_ul: 1
