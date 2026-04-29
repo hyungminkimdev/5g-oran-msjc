@@ -156,15 +156,14 @@ Stage 3 MobileNetV3 still uses **2D spectrograms**, but sourced from:
 ├── config.template.yaml       ← Template (safe to commit)
 │
 ├── srsran/
-│   ├── gnb_msjc.yaml          ← srsRAN gNB config (USRP, E2, 5GC addresses)
-│   └── ue_msjc.conf           ← srsUE config (USRP, PLMN, USIM)
+│   ├── gnb_msjc.yaml          ← srsRAN gNB config (FDD band3, USRP, E2)
+│   ├── ue_msjc.conf           ← srsUE config (FDD band3, USRP, USIM)
+│   └── xapp_kpm.conf          ← FlexRIC xApp KPM subscription config
 │
 ├── open5gs/
 │   └── setup_open5gs.sh       ← 5GC install + subscriber registration script
 │
 ├── xapp_msjc.py               ← Main O-RAN xApp (FlexRIC Python SDK)
-│                                 Subscribes E2SM-KPM, runs MSJC pipeline,
-│                                 logs to InfluxDB, optionally sends E2SM-RC
 │
 ├── stage1_mlp.py              ← MLP 5-class classifier (KPI features)
 ├── stage2_ksvm.py             ← KSVM binary False-Negative recheck (KPI features)
@@ -172,15 +171,20 @@ Stage 3 MobileNetV3 still uses **2D spectrograms**, but sourced from:
 │
 ├── kpi_feature_extractor.py   ← E2SM-KPM report → 8-dim numpy feature vector
 ├── iq_snapshot.py             ← On-demand I/Q capture for Stage 3 (via srsRAN API)
-│
 ├── influx_logger.py           ← Async InfluxDB KPI + detection event logger
 │
-├── labeler_rapp.py            ← [TO DO] Non-RT RIC rApp: GMM auto-labeling (Rahman et al.)
-├── training_manager_rapp.py   ← [TO DO] Non-RT RIC rApp: ClearML lifecycle (Rahman et al.)
+├── patches/
+│   ├── 0001-Add-NR-SA-patches-...patch   ← srsRAN gNB band n78 패치
+│   └── flexric-br-flexric-srsran-compat.patch
 │
 └── tools/
+    ├── start_gnb.sh           ← gNB 단독 시작 (taskset+chrt)
+    ├── start_stack.sh         ← 전체 스택 자동화 (5GC→RIC→gNB→UE→KPM)
+    ├── run-ue-safe.sh         ← UE 안전 실행 (timeout+reject 감시)
+    ├── jammer_sweep.sh        ← 재머 파라미터 sweep 자동화
+    ├── kpm_collector.py       ← KPM 데이터 CSV 수집기
     ├── jammer.py              ← 7-mode jammer (testbed validation tool)
-    └── collect_and_retrain.py ← Manual data collection + Stage1 retraining (dev tool)
+    └── collect_and_retrain.py ← Manual data collection + Stage1 retraining
 ```
 
 ---

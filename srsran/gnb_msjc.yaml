@@ -1,85 +1,54 @@
-# srsRAN Project gNB Configuration — MSJC 5G O-RAN Testbed
-# Instance-2: gNB + Near-RT RIC + 5GC
-# USRP X310 at 192.168.116.2, band n78, 10 MHz BW, SCS 30 kHz
-# srsRAN Project v25.10.0 compatible
-
 cu_cp:
   amf:
-    addr: 127.0.0.5                       # Open5GS AMF NGAP listen address
+    addr: 127.0.0.5
     port: 38412
-    bind_addr: 127.0.0.1                  # loopback — gNB and AMF co-located on Instance-2
-  inactivity_timer: 7200                  # seconds — keep UE connected for testing
-
+    bind_addr: 127.0.0.1
+  inactivity_timer: 7200
 cu_up:
   ngu:
     socket:
-      - bind_addr: 127.0.0.2             # GTP-U N3 bind — avoid conflict with 127.0.0.1:2152
-
+    - bind_addr: 127.0.0.2
 ru_sdr:
   device_driver: uhd
-  device_args: addr=192.168.116.2,num_send_frames=512,num_recv_frames=512
-  srate: 11.52                            # MHz — required by srsRAN for 10 MHz channel BW
-  tx_gain: 20                              # RF safety: max 20 dB on shared testbed
-  rx_gain: 31.5                          # UBX-160 max RX gain (range 0-31.5)
-  otw_format: sc16                        # HG FPGA image: sc12 not supported, use sc16
-  expert_cfg:
-    tx_mode: same-port                    # TDD: use TX/RX port for both TX and RX
-
+  device_args: type=x300,addr=192.168.116.2
+  srate: 11.52
+  tx_gain: 20
+  rx_gain: 37.5
 cell_cfg:
-  dl_arfcn: 632640                        # 3489.60 MHz center (NR band n78, aligned to GSCN 8519)
-  band: 78
+  dl_arfcn: 368500
+  band: 3
   channel_bandwidth_MHz: 10
-  common_scs: 30                          # subcarrier spacing kHz (numerology mu=1)
+  common_scs: 15
   nof_antennas_dl: 1
   nof_antennas_ul: 1
-  plmn: "00101"
+  plmn: '00101'
   tac: 7
-  pci: 1                                  # Physical Cell ID
-
+  pci: 1
   pdcch:
+    dedicated:
+      ss2_type: common
+      dci_format_0_1_and_1_1: false
     common:
-      coreset0_index: 2
+      coreset0_index: 6
       ss0_index: 0
-
   pdsch:
-    min_ue_mcs: 0
-    max_ue_mcs: 28
-
+    mcs_table: qam64
   pusch:
-    min_ue_mcs: 0
-    max_ue_mcs: 28
-
+    mcs_table: qam64
   prach:
     prach_config_index: 1
-    preamble_rx_target_pw: -80            # was default -100; raise so UE uses higher PRACH TX power
+    preamble_rx_target_pw: -80
     total_nof_ra_preambles: 64
-
-  tdd_ul_dl_cfg:
-    dl_ul_tx_period: 10                   # slots (5 ms periodicity)
-    nof_dl_slots: 7
-    nof_dl_symbols: 6
-    nof_ul_slots: 2
-    nof_ul_symbols: 4
-
 e2:
-  enable_du_e2: false                     # disabled — FlexRIC not running yet, avoid segfault
-  addr: 127.0.0.1                         # FlexRIC Near-RT RIC address
-  port: 36421                             # E2AP SCTP port (FlexRIC default)
-  e2sm_kpm_enabled: true                  # enable KPM service model
-  e2sm_rc_enabled: true                   # enable RC service model
-
-expert_phy:
-  max_proc_delay: 5                       # slots — give more time for PHY processing in VM
-
-expert_execution:
-  threads:
-    main_pool:
-      nof_threads: 2
-
+  enable_du_e2: true
+  addr: 127.0.0.1
+  port: 36421
+  e2sm_kpm_enabled: true
+  e2sm_rc_enabled: true
 log:
-  filename: /tmp/gnb_msjc.log
+  filename: stdout
   all_level: info
-
 pcap:
   mac_enable: false
   ngap_enable: false
+

@@ -17,7 +17,13 @@ __pycache__/
 # === 연구 자료 ===
 *.pdf
 
+# === 데이터 / 피처 ===
+*.npy
+*.csv
+
 # === 기타 ===
 .DS_Store
 *.old
+*.log
 nohup.out
+.claude/
