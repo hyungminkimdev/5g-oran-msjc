@@ -47,6 +47,7 @@ def _ts() -> str:
 # KPM SM Python 바인딩 미지원 → MAC SM 지표로 KPI 벡터 구성
 # ─────────────────────────────────────────────
 try:
+    sys.path.insert(0, '/usr/local/lib/python3/dist-packages/xapp_sdk/')
     import xapp_sdk as flexric
     _FLEXRIC_AVAILABLE = True
 except ImportError:
@@ -119,7 +120,7 @@ class MockFlexRIC:
 class _KPMCallback(flexric.kpm_cb if _FLEXRIC_AVAILABLE else object):
     """
     KPM SM indication 콜백 — xapp_sdk SWIG director 파생 클래스.
-    swig_kpm_ind_msg_t를 Python dict로 변환해 user_fn(hdr, msg)을 호출.
+    br-flexric API: ind.msg.frm_1 (FORMAT_1_INDICATION_MESSAGE)
     """
     def __init__(self, user_fn, node_id: str):
         if _FLEXRIC_AVAILABLE:
@@ -127,21 +128,24 @@ class _KPMCallback(flexric.kpm_cb if _FLEXRIC_AVAILABLE else object):
         self._fn      = user_fn
         self._node_id = node_id
 
-    def handle(self, ind):   # ind: swig_kpm_ind_msg_t* (pointer from C++)
-        # KPMStatsVector → Python dict
+    def handle(self, ind):
         msg = {}
-        for i in range(ind.meas.size()):
-            m = ind.meas[i]
-            msg[m.name] = m.value
-
-        # BLER 계산: TB.ErrTotNbrDl / TB.TotNbrDl
-        err = msg.get("TB.ErrTotNbrDl")
-        tot = msg.get("TB.TotNbrDl")
-        if err is not None and tot is not None:
-            msg["bler"] = (err / tot) if tot > 0 else 0.0
+        if ind.msg.type == flexric.FORMAT_1_INDICATION_MESSAGE:
+            frm1 = ind.msg.frm_1
+            for meas_data in frm1.meas_data_lst:
+                for j, rec in enumerate(meas_data.meas_record_lst):
+                    if j < len(frm1.meas_info_lst):
+                        info = frm1.meas_info_lst[j]
+                        name = info.meas_type.name if info.meas_type.type == flexric.NAME_MEAS_TYPE else str(info.meas_type.id)
+                    else:
+                        name = f"metric_{j}"
+                    if rec.value == flexric.REAL_MEAS_VALUE:
+                        msg[name] = rec.real_val
+                    elif rec.value == flexric.INTEGER_MEAS_VALUE:
+                        msg[name] = rec.int_val
 
         hdr = {"e2_node_id": self._node_id,
-               "timestamp_ms": ind.tstamp}
+               "timestamp_ms": int(time.time() * 1000)}
         try:
             self._fn(hdr, msg)
         except Exception as e:
@@ -151,26 +155,56 @@ class _KPMCallback(flexric.kpm_cb if _FLEXRIC_AVAILABLE else object):
 class RealFlexRIC:
     """
     FlexRIC Python SDK (xapp_sdk) 래퍼.
-    E2SM-KPM v2.03 구독: report_kpm_sm → _KPMCallback → MSJC 파이프라인.
+    br-flexric API: report_kpm_sm(node.id, interval, actions, callback)
+    Action definition format 1 (cell-level), E2SM-KPM v2.03/v3.
     """
 
-    def __init__(self, ric_addr: str, ric_port: int, report_period_ms: int):
+    # srsRAN DU가 지원하는 KPM 메트릭 (PHY 확장 포함)
+    KPM_ACTIONS = ['DRB.UEThpDl', 'DRB.UEThpUl', 'RRU.PrbTotDl', 'RRU.PrbTotUl',
+                   'CQI', 'RSRP', 'DL.BLER', 'UL.BLER', 'PUCCH.SINR']
+
+    def __init__(self, ric_addr: str, ric_port: int, report_period_ms: int,
+                 conf_path: str = "/tmp/xapp_kpm_msjc.conf"):
         self._ric_addr   = ric_addr
         self._ric_port   = ric_port
         self._period_ms  = report_period_ms
+        self._conf_path  = conf_path
         self._callback   = None
         self._stop_evt   = threading.Event()
-        self._handles    = []   # rm_report_kpm_sm에 필요한 핸들 목록
-        self._cb_refs    = []   # GC 방지용 콜백 객체 참조
+        self._handles    = []
+        self._cb_refs    = []
+
+    def _write_conf(self):
+        """FlexRIC xApp config 파일 생성"""
+        actions_str = ",\n".join(f'            {{ name = "{a}" }}' for a in self.KPM_ACTIONS)
+        conf = f'''SM_DIR = "/usr/local/lib/flexric/"
+Name = "xApp"
+NearRT_RIC_IP = "{self._ric_addr}"
+E42_Port = {self._ric_port}
+
+Sub_ORAN_SM_List = (
+    {{ name = "KPM", time = {self._period_ms},
+      format = 1,
+      ran_type = "ngran_gNB_DU",
+      actions = (
+{actions_str}
+            )
+    }}
+)
+'''
+        with open(self._conf_path, 'w') as f:
+            f.write(conf)
 
     def subscribe_kpm(self, callback, e2_node_id: str = ""):
         self._callback = callback
 
     def start(self):
-        # 1. nearRT-RIC 연결
-        flexric.init()
+        self._write_conf()
 
-        # 2. E2 노드(gNB) 연결 대기 — gNB가 늦게 시작해도 기다림
+        # 1. nearRT-RIC 연결 (br-flexric API: init with config)
+        flexric.init([sys.argv[0], '-c', self._conf_path])
+
+        # 2. E2 노드(gNB) 연결 대기
         conn = []
         wait_printed = False
         while not conn and not self._stop_evt.is_set():
@@ -182,45 +216,47 @@ class RealFlexRIC:
                 time.sleep(2.0)
 
         if not conn:
-            return  # stop() called
+            return
 
-        # 3. 각 E2 노드에 KPM 구독
+        # 3. Interval 매핑 (ms → enum)
+        interval = flexric.Interval_ms_1000  # default
+        try:
+            interval_map = {10: flexric.Interval_ms_10, 100: flexric.Interval_ms_100, 1000: flexric.Interval_ms_1000}
+            if self._period_ms in interval_map:
+                interval = interval_map[self._period_ms]
+        except AttributeError:
+            pass
+
+        # 4. 각 E2 노드에 KPM 구독
         for node in conn:
             mcc     = node.id.plmn.mcc
             mnc     = node.id.plmn.mnc
             node_id = f"gnb-mcc{mcc}-mnc{mnc}"
-            print(f"[{_ts()}] [FlexRIC] E2 노드: PLMN MCC={mcc} MNC={mnc}")
+            ntype   = flexric.get_e2ap_ngran_name(node.id.type)
+            print(f"[{_ts()}] [FlexRIC] E2 노드: {ntype} PLMN MCC={mcc} MNC={mnc}")
 
             cb = _KPMCallback(self._callback, node_id)
-            self._cb_refs.append(cb)   # GC 방지
+            self._cb_refs.append(cb)
 
-            # Interval 파라미터: 내부적으로 100ms 고정 (swig_wrapper.cpp 참조)
-            # enum class Interval은 SWIG에서 Interval_ms_XX 형태로 노출됨
-            handle = flexric.report_kpm_sm(node.id, flexric.Interval_ms_10, cb)
-            if handle < 0:
-                print(f"[{_ts()}] [FlexRIC] KPM 구독 실패 (handle={handle}) — "
-                      "nearRT-RIC가 KPM SM을 지원하는지 확인")
-            else:
-                self._handles.append(handle)
-                print(f"[{_ts()}] [FlexRIC] KPM 구독 완료: handle={handle}")
+            # br-flexric API: report_kpm_sm(node_id, interval, actions, callback)
+            handle = flexric.report_kpm_sm(node.id, interval, self.KPM_ACTIONS, cb)
+            self._handles.append(handle)
+            print(f"[{_ts()}] [FlexRIC] KPM 구독 완료: handle={handle}, "
+                  f"metrics={self.KPM_ACTIONS}, period={self._period_ms}ms")
 
         if not self._handles:
             raise RuntimeError("[FlexRIC] 모든 E2 노드의 KPM 구독 실패")
 
-        print(f"[{_ts()}] [FlexRIC] E2SM-KPM 수신 대기 중 (100ms 주기)...")
+        print(f"[{_ts()}] [FlexRIC] E2SM-KPM 수신 대기 중 ({self._period_ms}ms 주기)...")
 
-        # 3. 종료 신호 대기 (Ctrl+C 포함)
+        # 5. 종료 신호 대기
         try:
             self._stop_evt.wait()
         finally:
-            # 4. 구독 해제
-            for h in self._handles:
-                try:
-                    flexric.rm_report_kpm_sm(h)
-                except Exception:
-                    pass
-            self._handles.clear()
-            self._cb_refs.clear()
+            # os._exit로 종료 — rm_report_kpm_sm의 subscription delete timeout assertion 회피
+            # (FlexRIC br-flexric 버그: sync_ui timeout on delete response)
+            import os
+            os._exit(0)
 
     def stop(self):
         self._stop_evt.set()
@@ -244,8 +280,8 @@ class MSJCxApp:
         e2_cfg   = oran_cfg.get("e2", {})
 
         self._ric_addr        = e2_cfg.get("ric_addr", "127.0.0.1")
-        self._ric_port        = e2_cfg.get("ric_port", 36421)
-        self._report_period   = e2_cfg.get("report_period_ms", 100)
+        self._ric_port        = e2_cfg.get("ric_port", 36422)  # E42 port
+        self._report_period   = e2_cfg.get("report_period_ms", 1000)
         self._rc_enabled      = e2_cfg.get("e2sm_rc_enabled", False) and not args.no_rc
 
         self._use_mock        = args.mock_ric or not _FLEXRIC_AVAILABLE

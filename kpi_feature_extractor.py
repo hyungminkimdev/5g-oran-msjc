@@ -73,6 +73,13 @@ _KPM_KEY_MAP = {
     "cqi":               "cqi_mean",
     "HARQ.RetxRatio":    "harq_retx_rate",
     "harq_retx_rate":    "harq_retx_rate",
+    # srsRAN DU KPM 메트릭 직접 매핑 (e2sm_kpm_du_meas_provider_impl.cpp)
+    "CQI":               "cqi_mean",
+    "RSRP":              "rsrp_dbm",     # srsRAN: PUSCH SNR (dB) — RSRP placeholder
+    "RSRQ":              "rsrq_db",      # srsRAN: PUSCH SNR (dB) — RSRQ placeholder
+    "DL.BLER":           "bler",
+    "UL.BLER":           "uci_nack_rate", # UL BLER → UCI NACK rate proxy
+    "PUCCH.SINR":        "sinr_db",      # PUCCH SINR → SINR feature
     # Pass-through: FEATURE_NAMES used directly as keys (MockFlexRIC, internal use)
     "rsrp_dbm":          "rsrp_dbm",
     "rsrq_db":           "rsrq_db",
