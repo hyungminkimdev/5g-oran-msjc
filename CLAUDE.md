@@ -203,6 +203,29 @@ Stage 3 MobileNetV3 still uses **2D spectrograms**, but sourced from:
 
 ## 8. Development Constraints
 
+### 8.0 Golden Config — 고정된 인프라 환경 (절대 임의 변경 금지)
+
+아래 설정은 Band 3 FDD 20MHz 환경에서 5G Full Stack 연동(gNB↔UE↔5GC↔FlexRIC)에 성공한 검증 완료 설정이다.
+**인프라 설정 파일(yaml, conf)을 수정해야 할 경우 반드시 사용자에게 먼저 확인을 받아야 한다.**
+
+| 항목 | 값 | 근거 |
+|---|---|---|
+| **gNB srate** | 23.04 MHz | FFT 1536 (15kHz SCS 표준). 11.52→FFT 768(비표준)→PUSCH 실패 |
+| **gNB channel_bandwidth** | 20 MHz | srate 23.04에 대응 |
+| **gNB common_scs** | 15 kHz | Band 3 SSB SCS = 15kHz (30kHz 불가) |
+| **gNB dl_arfcn** | 368500 | 1842.5 MHz center (Band 3 FDD) |
+| **gNB E2** | enable_du_e2: true | FlexRIC KPM/RC 연동 필수 |
+| **gNB device_args** | addr=192.168.116.2,num_send_frames=512,num_recv_frames=512 | X310 프레임 버퍼 |
+| **UE srate** | 23.04e6 | gNB와 일치 필수 |
+| **UE nof_prb** | 106 | 20MHz @ 15kHz SCS |
+| **UE ssb_nr_arfcn** | 367450 | gNB가 동적 생성한 SSB ARFCN |
+| **UE master_clock_rate** | 184.32e6 | X310 HW 클럭 (device_args에 명시 필수) |
+| **UE tx_gain** | 5 dB | RF 안전 상한 |
+| **srsUE branch** | msjc-nr-sa-patches | release_23_11 + n78/cell-search 패치 |
+| **UHD** | 4.6.0 | 빌드 시점 고정 |
+
+### 8.1 General Constraints
+
 - **E2 Latency:** E2SM-KPM report period = 100 ms. Full MSJC pipeline must complete within 100 ms.
 - **Stage 3 trigger:** Invoke MobileNetV3 only for Deceptive/FN cases to stay within latency budget.
 - **MTU:** `sudo ip link set ens5 mtu 9000` must be set on all three instances before UHD streaming.
