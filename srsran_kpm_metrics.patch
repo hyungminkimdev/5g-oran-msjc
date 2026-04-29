@@ -1,0 +1,96 @@
+diff --git a/lib/e2/e2sm/e2sm_kpm/e2sm_kpm_du_meas_provider_impl.cpp b/lib/e2/e2sm/e2sm_kpm/e2sm_kpm_du_meas_provider_impl.cpp
+index bfc792ffe3..4e50decde3 100644
+--- a/lib/e2/e2sm/e2sm_kpm/e2sm_kpm_du_meas_provider_impl.cpp
++++ b/lib/e2/e2sm/e2sm_kpm/e2sm_kpm_du_meas_provider_impl.cpp
+@@ -106,6 +106,20 @@ e2sm_kpm_du_meas_provider_impl::e2sm_kpm_du_meas_provider_impl(srs_du::f1ap_ue_i
+                             e2sm_kpm_supported_metric_t{
+                                 NO_LABEL, E2_NODE_LEVEL, true, &e2sm_kpm_du_meas_provider_impl::get_prach_cell_count});
+ 
++  // MSJC: Additional PHY metrics for jamming detection
++  supported_metrics.emplace(
++      "DL.BLER",
++      e2sm_kpm_supported_metric_t{
++          NO_LABEL, UNKNOWN_LEVEL, false, &e2sm_kpm_du_meas_provider_impl::get_dl_bler});
++  supported_metrics.emplace(
++      "UL.BLER",
++      e2sm_kpm_supported_metric_t{
++          NO_LABEL, UNKNOWN_LEVEL, false, &e2sm_kpm_du_meas_provider_impl::get_ul_bler});
++  supported_metrics.emplace(
++      "PUCCH.SINR",
++      e2sm_kpm_supported_metric_t{
++          NO_LABEL, UNKNOWN_LEVEL, false, &e2sm_kpm_du_meas_provider_impl::get_pucch_sinr});
++
+   // Check if the supported metrics are matching e2sm_kpm metrics definitions.
+   check_e2sm_kpm_metrics_definitions(get_e2sm_kpm_28_552_metrics());
+   check_e2sm_kpm_metrics_definitions(get_e2sm_kpm_oran_metrics());
+@@ -1205,3 +1219,56 @@ bool e2sm_kpm_du_meas_provider_impl::get_drb_ul_rlc_sdu_latency(const asn1::e2sm
+   }
+   return meas_collected;
+ }
++
++// ── MSJC: DL BLER = dl_nof_nok / (dl_nof_ok + dl_nof_nok) ──
++bool e2sm_kpm_du_meas_provider_impl::get_dl_bler(const asn1::e2sm::label_info_list_l          label_info_list,
++                                                  const std::vector<asn1::e2sm::ue_id_c>&      ues,
++                                                  const std::optional<asn1::e2sm::cgi_c>       cell_global_id,
++                                                  std::vector<asn1::e2sm::meas_record_item_c>& items)
++{
++  if (last_ue_metrics.empty()) {
++    return handle_no_meas_data_available(ues, items, asn1::e2sm::meas_record_item_c::types::options::real);
++  }
++  scheduler_ue_metrics ue_metrics = last_ue_metrics[0];
++
++  meas_record_item_c meas_record_item;
++  unsigned total = ue_metrics.dl_nof_ok + ue_metrics.dl_nof_nok;
++  meas_record_item.set_real().value = (total > 0) ? static_cast<double>(ue_metrics.dl_nof_nok) / total : 0.0;
++  items.push_back(meas_record_item);
++  return true;
++}
++
++// ── MSJC: UL BLER = ul_nof_nok / (ul_nof_ok + ul_nof_nok) ──
++bool e2sm_kpm_du_meas_provider_impl::get_ul_bler(const asn1::e2sm::label_info_list_l          label_info_list,
++                                                  const std::vector<asn1::e2sm::ue_id_c>&      ues,
++                                                  const std::optional<asn1::e2sm::cgi_c>       cell_global_id,
++                                                  std::vector<asn1::e2sm::meas_record_item_c>& items)
++{
++  if (last_ue_metrics.empty()) {
++    return handle_no_meas_data_available(ues, items, asn1::e2sm::meas_record_item_c::types::options::real);
++  }
++  scheduler_ue_metrics ue_metrics = last_ue_metrics[0];
++
++  meas_record_item_c meas_record_item;
++  unsigned total = ue_metrics.ul_nof_ok + ue_metrics.ul_nof_nok;
++  meas_record_item.set_real().value = (total > 0) ? static_cast<double>(ue_metrics.ul_nof_nok) / total : 0.0;
++  items.push_back(meas_record_item);
++  return true;
++}
++
++// ── MSJC: PUCCH SINR (dB) ──
++bool e2sm_kpm_du_meas_provider_impl::get_pucch_sinr(const asn1::e2sm::label_info_list_l          label_info_list,
++                                                     const std::vector<asn1::e2sm::ue_id_c>&      ues,
++                                                     const std::optional<asn1::e2sm::cgi_c>       cell_global_id,
++                                                     std::vector<asn1::e2sm::meas_record_item_c>& items)
++{
++  if (last_ue_metrics.empty()) {
++    return handle_no_meas_data_available(ues, items, asn1::e2sm::meas_record_item_c::types::options::real);
++  }
++  scheduler_ue_metrics ue_metrics = last_ue_metrics[0];
++
++  meas_record_item_c meas_record_item;
++  meas_record_item.set_real().value = static_cast<double>(ue_metrics.pucch_snr_db);
++  items.push_back(meas_record_item);
++  return true;
++}
+diff --git a/lib/e2/e2sm/e2sm_kpm/e2sm_kpm_du_meas_provider_impl.h b/lib/e2/e2sm/e2sm_kpm/e2sm_kpm_du_meas_provider_impl.h
+index 6caaa0f607..e979ab726c 100644
+--- a/lib/e2/e2sm/e2sm_kpm/e2sm_kpm_du_meas_provider_impl.h
++++ b/lib/e2/e2sm/e2sm_kpm/e2sm_kpm_du_meas_provider_impl.h
+@@ -121,6 +121,9 @@ private:
+   metric_meas_getter_func_t get_drb_dl_rlc_sdu_latency;
+   metric_meas_getter_func_t get_drb_ul_rlc_sdu_latency;
+   metric_meas_getter_func_t get_prach_cell_count;
++  metric_meas_getter_func_t get_dl_bler;
++  metric_meas_getter_func_t get_ul_bler;
++  metric_meas_getter_func_t get_pucch_sinr;
+ 
+   srslog::basic_logger&                              logger;
+   srs_du::f1ap_ue_id_translator&                     f1ap_ue_id_provider;
