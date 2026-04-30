@@ -168,7 +168,7 @@ def build_nr_pss_frame(gain: float = 1.0) -> np.ndarray:
 # 메인 재머
 # ─────────────────────────────────────────────
 def run_jammer(addr, mode="constant", freq=3.5e9, rate=20e6, gain=75,
-               nr_timing=True):
+               nr_timing=True, amplitude=1.0):
     print(f"[Jammer] USRP 연결 중: addr={addr}")
     usrp = uhd.usrp.MultiUSRP(f"addr={addr}")
     usrp.set_tx_rate(rate)
@@ -176,7 +176,7 @@ def run_jammer(addr, mode="constant", freq=3.5e9, rate=20e6, gain=75,
     usrp.set_tx_gain(gain)
     usrp.set_tx_antenna("TX/RX", 0)
     print(f"[Jammer] 초기화 완료 — rate={rate/1e6:.0f} MHz, freq={freq/1e9:.1f} GHz, "
-          f"gain={gain} dB, ant=TX/RX")
+          f"gain={gain} dB, amplitude={amplitude:.3f}, ant=TX/RX")
     if nr_timing and mode in ("reactive", "pdcch", "pss"):
         print(f"[Jammer] 5G NR 타이밍 모드 활성화 "
               f"(SAMPLES_PER_FRAME={SAMPLES_PER_FRAME}, SLOT={SAMPLES_PER_SLOT})")
@@ -193,7 +193,7 @@ def run_jammer(addr, mode="constant", freq=3.5e9, rate=20e6, gain=75,
     try:
         while True:
             if mode == "constant":
-                streamer.send(awgn(10000), metadata)
+                streamer.send(awgn(10000) * amplitude, metadata)
 
             elif mode == "random":
                 streamer.send(awgn(5000), metadata)
@@ -265,6 +265,7 @@ if __name__ == "__main__":
     parser.add_argument("--freq", type=float, default=3.5e9, help="TX 주파수 Hz (기본: 3.5e9)")
     parser.add_argument("--rate", type=float, default=20e6,  help="샘플 레이트 Hz (기본: 20e6)")
     parser.add_argument("--gain", type=int,   default=75,    help="TX 게인 dB (기본: 75)")
+    parser.add_argument("--amplitude", type=float, default=1.0, help="신호 amplitude 스케일링 0.0~1.0 (기본: 1.0)")
     parser.add_argument("--nr-timing",    dest="nr_timing", action="store_true",  default=True,
                         help="5G NR 프레임 타이밍 기반 송신 (기본: 활성화)")
     parser.add_argument("--no-nr-timing", dest="nr_timing", action="store_false",
@@ -276,4 +277,4 @@ if __name__ == "__main__":
 
     mode = args.mode if args.mode else select_mode_interactive()
     run_jammer(addr, mode=mode, freq=args.freq, rate=args.rate, gain=args.gain,
-               nr_timing=args.nr_timing)
+               nr_timing=args.nr_timing, amplitude=args.amplitude)
