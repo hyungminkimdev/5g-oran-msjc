@@ -234,7 +234,7 @@ def build_dmrs_frame(amplitude=1.0):
 def run_jammer(addr, mode="constant", freq=DL_FREQ, rate=RATE, gain=0,
                amplitude=1.0):
     print(f"[Jammer] USRP 연결 중: addr={addr}")
-    usrp = uhd.usrp.MultiUSRP(f"addr={addr}")
+    usrp = uhd.usrp.MultiUSRP(f"addr={addr},master_clock_rate=184.32e6")
     usrp.set_tx_rate(rate)
     usrp.set_tx_freq(uhd.libpyuhd.types.tune_request(freq))
     usrp.set_tx_gain(gain)
