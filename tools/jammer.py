@@ -196,53 +196,42 @@ def run_jammer(addr, mode="constant", freq=3.5e9, rate=20e6, gain=75,
                 streamer.send(awgn(10000) * amplitude, metadata)
 
             elif mode == "random":
-                streamer.send(awgn(5000), metadata)
-                time.sleep(np.random.uniform(0.01, 0.1))
+                streamer.send(awgn(5000) * amplitude, metadata)
+                time.sleep(np.random.uniform(0.005, 0.05))
 
             elif mode == "reactive":
                 if nr_timing:
-                    # 5G NR 프레임 타이밍: UL 슬롯 정확히 타겟
-                    frame = build_nr_reactive_frame(gain=1.0)
+                    frame = build_nr_reactive_frame(gain=amplitude)
                     streamer.send(frame, metadata)
-                    # 다음 프레임 경계까지 대기 (10ms)
-                    time.sleep(0.010)
                 else:
-                    # Legacy: 5ms 주기 단순 펄스
-                    streamer.send(awgn(2000), metadata)
+                    streamer.send(awgn(2000) * amplitude, metadata)
                     time.sleep(0.005)
 
             elif mode == "deceptive":
-                streamer.send(ofdm_like(), metadata)
+                streamer.send(ofdm_like() * amplitude, metadata)
                 time.sleep(0.001)
 
             elif mode == "pss":
                 if nr_timing:
-                    # PSS: 10ms 프레임 경계마다 PSS 위치에 재밍
-                    frame = build_nr_pss_frame(gain=1.0)
+                    frame = build_nr_pss_frame(gain=amplitude)
                     streamer.send(frame, metadata)
-                    time.sleep(0.020)  # 2 radio frames (PSS period)
                 else:
-                    # Legacy: 20ms 주기 PSS-like 버스트
-                    streamer.send(np.tile(pss_jamming_symbol(), 5), metadata)
+                    streamer.send(np.tile(pss_jamming_symbol(), 5) * amplitude, metadata)
                     time.sleep(0.020)
 
             elif mode == "pdcch":
                 if nr_timing:
-                    # PDCCH: 슬롯별 CORESET 심볼 정밀 타겟
                     n_sym = np.random.randint(1, 4)
-                    frame = build_nr_pdcch_frame(n_sym, gain=1.0)
+                    frame = build_nr_pdcch_frame(n_sym, gain=amplitude)
                     streamer.send(frame, metadata)
-                    time.sleep(0.010)  # 1 radio frame
                 else:
-                    # Legacy: 0.5ms 슬롯마다 첫 심볼 버스트
                     n_sym = np.random.randint(1, 4)
-                    streamer.send(pdcch_jamming_burst(n_sym), metadata)
+                    streamer.send(pdcch_jamming_burst(n_sym) * amplitude, metadata)
                     time.sleep(0.0005)
 
             elif mode == "dmrs":
-                # DMRS: 빗살 패턴 연속 송신 (NR 타이밍 불필요 — 심볼 내 패턴)
                 spacing = np.random.choice([4, 6])
-                streamer.send(np.tile(dmrs_jamming_symbol(spacing), 5), metadata)
+                streamer.send(np.tile(dmrs_jamming_symbol(spacing), 5) * amplitude, metadata)
                 time.sleep(0.001)
 
             tx_count += 1
