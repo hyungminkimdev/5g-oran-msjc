@@ -116,6 +116,16 @@ def extract_from_kpm(kpm_msg: dict) -> np.ndarray:
             except (ValueError, TypeError):
                 pass
 
+    # E2SM-KPM CQI 보정: srsRAN DU KPM은 평균 CQI(0-15)를 보내지만,
+    # gNB stdout은 accumulator(0-50)를 출력. 모델은 accumulator scale로 학습.
+    # CQI ≤ 15이면 accumulator scale로 변환 (×3.33)
+    if values["cqi_mean"] <= 15.0:
+        values["cqi_mean"] = values["cqi_mean"] * (50.0 / 15.0)
+
+    # dl_throughput=0 (idle)이면 default 유지 (모델이 0에 민감)
+    if values["dl_throughput_mbps"] < 0.01:
+        values["dl_throughput_mbps"] = _DEFAULTS["dl_throughput_mbps"]
+
     vec = np.array([values[name] for name in FEATURE_NAMES], dtype=np.float32)
     return vec
 
