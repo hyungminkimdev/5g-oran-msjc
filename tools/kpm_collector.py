@@ -60,7 +60,7 @@ if __name__ == '__main__':
         os._exit(1)
 
     cb = KPMCollector(label, writer, duration)
-    h = ric.report_kpm_sm(conn[0].id, ric.Interval_ms_1000, METRICS, cb)
+    h = ric.report_kpm_sm(conn[0].id, ric.Interval_ms_100, METRICS, cb)
     print(f'Collecting "{label}" for {duration}s...', flush=True)
 
     time.sleep(duration)

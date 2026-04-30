@@ -281,7 +281,7 @@ class MSJCxApp:
 
         self._ric_addr        = e2_cfg.get("ric_addr", "127.0.0.1")
         self._ric_port        = e2_cfg.get("ric_port", 36422)  # E42 port
-        self._report_period   = e2_cfg.get("report_period_ms", 1000)
+        self._report_period   = e2_cfg.get("report_period_ms", 100)
         self._rc_enabled      = e2_cfg.get("e2sm_rc_enabled", False) and not args.no_rc
 
         self._use_mock        = args.mock_ric or not _FLEXRIC_AVAILABLE
