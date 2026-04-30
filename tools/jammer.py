@@ -123,12 +123,34 @@ def build_constant_buffer(n_samples, amplitude=1.0):
     return awgn(n_samples) * amplitude
 
 def build_random_burst(amplitude=1.0):
-    """랜덤 길이 burst (1~5 OFDM 심볼)"""
+    """[deprecated] 랜덤 길이 burst — build_random_frame 사용 권장"""
     n_sym = np.random.randint(1, 6)
     burst = []
     for _ in range(n_sym):
         burst.append(ofdm_symbol(amplitude=amplitude))
     return np.concatenate(burst)
+
+def build_random_frame(amplitude=1.0, duty_cycle=0.3):
+    """
+    랜덤 burst 재밍 — 10ms 프레임 내 랜덤 위치에 AWGN burst 배치.
+    duty_cycle=0.3 → 평균 30% ON (약 3ms burst / 10ms frame)
+    burst 단위: 1~5 OFDM 심볼, 간격도 랜덤
+    Constant와 달리 시간축에서 불규칙 on/off 패턴.
+    """
+    frame = np.zeros(SAMPLES_PER_FRAME, dtype=np.complex64)
+    pos = 0
+    while pos < SAMPLES_PER_FRAME:
+        if np.random.rand() < duty_cycle:
+            # ON: 1~5 OFDM 심볼 길이 AWGN burst
+            burst_len = np.random.randint(1, 6) * SAMPLES_PER_SYMBOL
+            end = min(pos + burst_len, SAMPLES_PER_FRAME)
+            frame[pos:end] = awgn(end - pos) * amplitude
+            pos = end
+        else:
+            # OFF: 1~3 OFDM 심볼 gap (silence)
+            gap_len = np.random.randint(1, 4) * SAMPLES_PER_SYMBOL
+            pos += gap_len
+    return frame
 
 def build_reactive_frame(amplitude=1.0):
     """
@@ -266,9 +288,8 @@ def run_jammer(addr, mode="constant", freq=DL_FREQ, rate=RATE, gain=0,
                 streamer.send(buf, metadata)
 
             elif mode == "random":
-                burst = build_random_burst(amplitude)
-                streamer.send(burst, metadata)
-                time.sleep(np.random.uniform(0.002, 0.02))
+                frame = build_random_frame(amplitude, duty_cycle=0.3)
+                streamer.send(frame, metadata)
 
             elif mode == "reactive":
                 frame = build_reactive_frame(amplitude)

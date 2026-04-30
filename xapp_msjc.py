@@ -25,6 +25,7 @@ import time
 import threading
 import yaml
 import numpy as np
+from collections import deque
 from datetime import datetime
 
 # ─────────────────────────────────────────────
@@ -303,6 +304,11 @@ class MSJCxApp:
             "stage3": os.path.join(os.path.dirname(__file__), "stage3_mobilenet.pth"),
         }
 
+        # KPM 히스토리 버퍼 (Stage 2 sliding window용)
+        from stage2_ksvm import WINDOW_SIZE
+        self._kpm_window_size = WINDOW_SIZE
+        self._kpm_history = deque(maxlen=WINDOW_SIZE)
+
         # Runtime stats
         self._stats = {
             "total": 0, "attacks": 0, "normals": 0,
@@ -425,6 +431,9 @@ class MSJCxApp:
         from kpi_feature_extractor import extract_from_kpm
         features = extract_from_kpm(msg)
 
+        # KPM 히스토리 버퍼에 저장 (Stage 2 sliding window용)
+        self._kpm_history.append(features.copy())
+
         verdict = self._run_pipeline(features)
         verdict["latency_ms"] = (time.perf_counter() - t0) * 1000
 
@@ -509,10 +518,11 @@ class MSJCxApp:
                     "final_verdict": "ATTACK_CONFIRMED",
                 }
 
-            # s1_label == "Normal"
-            if self._has_stage2:
+            # s1_label == "Normal" → Stage 2 sliding window 재검사
+            if self._has_stage2 and len(self._kpm_history) >= self._kpm_window_size:
                 from stage2_ksvm import recheck as s2_recheck
-                is_attack, s2_conf, _ = s2_recheck(features, self._s2_pipeline)
+                window = np.array(list(self._kpm_history))  # (W, 8)
+                is_attack, s2_conf, _ = s2_recheck(window, self._s2_pipeline)
 
                 if is_attack:
                     if self._has_stage3:
@@ -535,6 +545,7 @@ class MSJCxApp:
                     "final_verdict": "CLEAN",
                 }
 
+            # Stage 2 비활성화 또는 window 미충족 → Normal 확정
             return {
                 "s1_label": s1_label, "s1_confidence": s1_conf,
                 "final_verdict": "CLEAN",

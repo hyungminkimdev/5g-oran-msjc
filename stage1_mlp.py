@@ -27,6 +27,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from kpi_feature_extractor import (
     simulate_kpi_chunk,
+    load_real_csv,
     NUM_FEATURES as KPI_NUM_FEATURES,
 )
 
@@ -206,29 +207,45 @@ def simulate_chunk(label: str, gain_factor: float = 1.0) -> np.ndarray:
     raise ValueError(f"Unknown label: {label}")
 
 
-def generate_synthetic_dataset(n_per_class: int = 500):
+def generate_synthetic_dataset(n_per_class: int = 500, real_csv: str = None):
     """
-    5클래스 합성 데이터셋 생성 (KPI + I/Q 혼합 50/50)
+    5클래스 데이터셋 생성 (합성 KPI 프로파일 기반).
+    real_csv가 주어지면 실측 데이터도 혼합.
+
     Returns: X (N×8 float32), y (N, int64)
     """
     X_list, y_list = [], []
 
+    # 합성 데이터 (실측 KPM scale 프로파일)
     for label in LABELS:
-        # Half from KPI simulation
-        kpi_count = n_per_class // 2
-        for _ in range(kpi_count):
+        for _ in range(n_per_class):
             feat = simulate_kpi_chunk(label)
             X_list.append(feat)
             y_list.append(LABEL_IDX[label])
 
-        # Half from legacy I/Q simulation
-        iq_count = n_per_class - kpi_count
-        for _ in range(iq_count):
-            gain = np.random.uniform(0.5, 2.0)
-            iq = simulate_chunk(label, gain_factor=gain)
-            feat = _extract_iq_features(iq)
-            X_list.append(feat)
-            y_list.append(LABEL_IDX[label])
+    # 실측 데이터 혼합 (명확한 열화가 보이는 공격 샘플만 포함)
+    if real_csv and os.path.exists(real_csv):
+        X_real, labels_real = load_real_csv(real_csv)
+        added, skipped = 0, 0
+        for feat, lbl in zip(X_real, labels_real):
+            if lbl not in LABEL_IDX:
+                continue
+            if lbl == "Normal":
+                # Normal은 그대로 포함
+                X_list.append(feat)
+                y_list.append(LABEL_IDX[lbl])
+                added += 1
+            else:
+                # 공격 샘플: KPM 열화가 보이는 것만 포함
+                # (clean-looking 공격은 Stage2/3 담당이므로 Stage1 학습에서 제외)
+                sinr, bler, cqi = feat[2], feat[3], feat[6]
+                if bler > 0.03 or sinr < 3.0 or cqi < 48:
+                    X_list.append(feat)
+                    y_list.append(LABEL_IDX[lbl])
+                    added += 1
+                else:
+                    skipped += 1
+        print(f"[Stage1 MLP] 실측 데이터 {added}개 혼합, {skipped}개 스킵 (clean-looking 공격) ({real_csv})")
 
     return np.array(X_list, dtype=np.float32), np.array(y_list, dtype=np.int64)
 
@@ -236,7 +253,8 @@ def generate_synthetic_dataset(n_per_class: int = 500):
 # ─────────────────────────────────────────────
 # 4. 학습
 # ─────────────────────────────────────────────
-def train_and_save(n_per_class: int = 500, epochs: int = 50, lr: float = 0.001):
+def train_and_save(n_per_class: int = 500, epochs: int = 50, lr: float = 0.001,
+                   real_csv: str = None):
     # ClearML integration (graceful)
     clearml_task = None
     try:
@@ -253,13 +271,14 @@ def train_and_save(n_per_class: int = 500, epochs: int = 50, lr: float = 0.001):
             "num_features": NUM_FEATURES,
             "num_classes": NUM_CLASSES,
             "architecture": "MLP 8→256→128→64→5",
+            "real_csv": real_csv or "none",
         })
         print("[Stage1 MLP] ClearML 실험 추적 활성화")
     except ImportError:
         print("[Stage1 MLP] ClearML 미설치 — 실험 추적 비활성화")
 
     print(f"[Stage1 MLP] 합성 데이터 생성 중 (클래스당 {n_per_class}개, 총 {n_per_class * NUM_CLASSES}개)...")
-    X, y = generate_synthetic_dataset(n_per_class)
+    X, y = generate_synthetic_dataset(n_per_class, real_csv=real_csv)
 
     # StandardScaler로 정규화
     from sklearn.preprocessing import StandardScaler
@@ -382,12 +401,15 @@ if __name__ == "__main__":
                         help="클래스당 합성 샘플 수 (기본: 500)")
     parser.add_argument("--epochs", type=int, default=50,
                         help="학습 에포크 수 (기본: 50)")
+    parser.add_argument("--real-csv", type=str, default=None,
+                        help="실측 CSV 파일 경로 (학습에 혼합)")
     parser.add_argument("--test", action="store_true",
                         help="합성 테스트 데이터로 정확도 확인")
     args = parser.parse_args()
 
     if args.retrain:
-        model, scaler, device = train_and_save(args.n_per_class, args.epochs)
+        model, scaler, device = train_and_save(args.n_per_class, args.epochs,
+                                               real_csv=args.real_csv)
     else:
         model, scaler, device = load_model()
 
