@@ -137,8 +137,9 @@ def extract_from_kpm(kpm_msg: dict) -> np.ndarray:
 # ─────────────────────────────────────────────
 _ATTACK_PROFILES = {
     #                   rsrp(pusch)    rsrq(fixed)    sinr(pucch)  bler         nack         tput(fixed)  cqi(accum)   harq
-    "Normal":         [(-1, 32),     (-12.5,-11.5), (3.5, 5.5),  (0.0,0.01),  (0.0,0.01),  (95,105),    (49,50),     (0.0,0.02)],
-    "Constant":       [(-5, 31),     (-12.5,-11.5), (-2.5, 4.0), (0.75,1.0),  (0.75,1.0),  (95,105),    (38,50),     (0.75,1.0)],
+    # Normal: 자연 변동 포함 (실측: 6/120 BLER spike, 20/120 CQI dip)
+    "Normal":         [(-1, 32),     (-12.5,-11.5), (-1.0,6.0),  (0.0,0.15),  (0.0,0.15),  (95,105),    (38,50),     (0.0,0.15)],
+    "Constant":       [(-5, 31),     (-12.5,-11.5), (-2.5, 2.0), (0.80,1.0),  (0.80,1.0),  (95,105),    (38,50),     (0.80,1.0)],
     # Deceptive: 명확한 KPM 열화만 (clean-looking Deceptive은 Stage 2/3 담당)
     "Deceptive":      [(-1, 32),     (-12.5,-11.5), (-5.0, 3.5), (0.02,0.5),  (0.02,0.5),  (95,105),    (36,49),     (0.02,0.5)],
     # Stage 3 subtypes (backward compat)
@@ -148,15 +149,15 @@ _ATTACK_PROFILES = {
 }
 # Burst/intermittent attacks: (jammed_profile, clean_profile, jam_probability)
 _BURST_PROFILES = {
-    "Random":   ("Random_jam",   "Random_clean",   0.35),
-    "Reactive": ("Reactive_jam", "Reactive_clean",  0.55),
+    "Random":   ("Random_jam",   "Random_clean",   0.65),   # 실측: 69% BLER>0
+    "Reactive": ("Reactive_jam", "Reactive_clean",  0.60),   # 실측: 66% BLER>0
 }
-# Random: 현재 파워에서 KPM 영향 미미, 약간의 signal만 부여 (고파워 대비)
-_ATTACK_PROFILES["Random_jam"]    = [(-1, 32),    (-12.5,-11.5), (2.5, 5.0),  (0.0,0.15),  (0.0,0.10),  (95,105),   (47,50),     (0.0,0.15)]
-_ATTACK_PROFILES["Random_clean"]  = [(-1, 32),    (-12.5,-11.5), (3.5, 5.5),  (0.0,0.01),  (0.0,0.01),  (95,105),   (49,50),     (0.0,0.02)]
-# Reactive: 55% 확률 burst, BLER 0.1~0.85 (실측 mean=0.23)
-_ATTACK_PROFILES["Reactive_jam"]  = [(-1, 32),    (-12.5,-11.5), (3.5, 5.5),  (0.10,0.85), (0.10,0.85), (95,105),   (48,50),     (0.10,0.85)]
-_ATTACK_PROFILES["Reactive_clean"]= [(-1, 32),    (-12.5,-11.5), (3.5, 5.5),  (0.0,0.01),  (0.0,0.01),  (95,105),   (49,50),     (0.0,0.02)]
+# Random: duty 30% → BLER 0~1.0, mean=0.33 (실측)
+_ATTACK_PROFILES["Random_jam"]    = [(-1, 32),    (-12.5,-11.5), (-1.0, 6.0), (0.10,1.0),  (0.10,1.0),  (95,105),   (38,50),     (0.10,1.0)]
+_ATTACK_PROFILES["Random_clean"]  = [(-1, 32),    (-12.5,-11.5), (0.0, 6.0),  (0.0,0.05),  (0.0,0.05),  (95,105),   (40,50),     (0.0,0.05)]
+# Reactive: duty 40% → BLER 0~1.0, mean=0.28 (실측), CQI 40 dip
+_ATTACK_PROFILES["Reactive_jam"]  = [(-1, 32),    (-12.5,-11.5), (0.0, 6.0),  (0.10,1.0),  (0.10,1.0),  (95,105),   (40,50),     (0.10,1.0)]
+_ATTACK_PROFILES["Reactive_clean"]= [(-1, 32),    (-12.5,-11.5), (0.0, 6.0),  (0.0,0.05),  (0.0,0.05),  (95,105),   (40,50),     (0.0,0.05)]
 
 
 def _sample_profile(profile: list) -> np.ndarray:
@@ -192,20 +193,37 @@ _LABEL_TO_STAGE1 = {
 
 
 def csv_row_to_features(row: dict) -> np.ndarray:
-    """kpm_fdd_7modes.csv 한 줄 → 8-dim feature vector (extract_from_kpm 동일 스케일)"""
-    dl_ok = float(row.get("dl_ok", 0))
-    dl_nok = float(row.get("dl_nok", 0))
+    """
+    실측 CSV 한 줄 → 8-dim feature vector.
+    두 가지 CSV 형식 지원:
+      (A) kpm_fdd_7modes.csv: pusch_snr, pucch_snr, dl_ok, dl_nok, dl_bler, cqi
+      (B) kpm_collector.py: RSRP, PUCCH.SINR, DL.BLER, UL.BLER, CQI, DRB.UEThpDl
+    """
+    # 형식 감지: KPM 메트릭 이름이 있으면 (B)
+    if "PUCCH.SINR" in row or "CQI" in row:
+        # kpm_collector.py 형식 → extract_from_kpm과 동일 경로
+        return extract_from_kpm(row)
+
+    # (A) 기존 형식 — 빈 문자열 대응
+    def _f(val, default=0.0):
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return default
+
+    dl_ok = _f(row.get("dl_ok", 0))
+    dl_nok = _f(row.get("dl_nok", 0))
     total = dl_ok + dl_nok
     nack_rate = dl_nok / total if total > 0 else 0.0
 
     return np.array([
-        float(row.get("pusch_snr", 0)),   # [0] rsrp_dbm (PUSCH SNR placeholder)
+        _f(row.get("pusch_snr", 0)),      # [0] rsrp_dbm (PUSCH SNR placeholder)
         -12.0,                             # [1] rsrq_db (미제공)
-        float(row.get("pucch_snr", 0)),   # [2] sinr_db (PUCCH.SINR)
-        float(row.get("dl_bler", 0)),     # [3] bler
+        _f(row.get("pucch_snr", 0)),      # [2] sinr_db (PUCCH.SINR)
+        _f(row.get("dl_bler", 0)),        # [3] bler
         nack_rate,                         # [4] uci_nack_rate (파생)
         100.0,                             # [5] dl_throughput_mbps (미제공)
-        float(row.get("cqi", 50)),        # [6] cqi_mean (accumulator)
+        _f(row.get("cqi", 50), 50),       # [6] cqi_mean (accumulator)
         nack_rate,                         # [7] harq_retx_rate (NACK과 동일)
     ], dtype=np.float32)
 

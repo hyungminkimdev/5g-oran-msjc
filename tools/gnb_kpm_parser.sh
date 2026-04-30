@@ -14,7 +14,7 @@ echo "[parser] Collecting '$LABEL' for ${DURATION}s from gNB log..."
 END=$(($(date +%s) + DURATION))
 COUNT=0
 
-tail -f /tmp/gnb.log | grep --line-buffered "MSJC KPM report_metrics" | while read -r line; do
+tail -f /tmp/gnb.log | grep -a --line-buffered "MSJC KPM report_metrics" | while read -r line; do
   NOW=$(date +%s)
   if [ "$NOW" -ge "$END" ]; then
     break
