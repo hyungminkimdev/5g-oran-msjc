@@ -224,9 +224,30 @@ Stage 3 MobileNetV3 still uses **2D spectrograms**, but sourced from:
 | **srsUE branch** | msjc-nr-sa-patches | release_23_11 + n78/cell-search 패치 |
 | **UHD** | 4.6.0 | 빌드 시점 고정 |
 
-### 8.1 General Constraints
+### 8.1 Jammer 고정 설정 (Phase 3에서 확정)
 
-- **E2 Latency:** E2SM-KPM report period = 100 ms. Full MSJC pipeline must complete within 100 ms.
+Jammer USRP(Instance-3)의 RF 파라미터는 gNB와 정확히 일치해야 한다.
+
+| 항목 | 값 | 근거 |
+|---|---|---|
+| **Jammer srate** | 23.04 MHz | gNB와 동일. FFT=1536, 심볼 경계 일치 필수 |
+| **Jammer master_clock_rate** | 184.32e6 | X310 기본 200MHz에서는 23.04MHz 불가 (22.222로 반올림됨) |
+| **Jammer 기본 freq** | 1842.5 MHz | Band 3 DL 중심 주파수. FDD이므로 DL만 재밍 |
+| **Jammer OFDM 구조** | FFT=1536, CP=108, 14심볼/슬롯 | gNB OFDM 심볼과 동일 구조로 생성해야 효과적 |
+| **FDD 전제** | 모든 슬롯이 DL (DL freq 기준) | TDD UL/DL 슬롯 구분 로직 사용 금지 |
+| **Constant sweet spot** | gain=0, amplitude=0.6 | UE 유지 + BLER 92%, SINR 1dB |
+
+### 8.2 KPM 보고 주기
+
+| 항목 | 값 | 근거 |
+|---|---|---|
+| **E2SM-KPM report period** | 1000 ms (현재) | gNB scheduler metrics가 1초 주기 push. 100ms 설정 시 gNB PRACH buffer 소진 + UE attach 실패 발생 → 1초 유지 |
+| **xapp_kpm.conf** | `time = 100` | FlexRIC xApp subscription 설정 (gNB 내부 push는 1초) |
+| **MSJC latency budget** | ≤ 100 ms | Stage1~3 추론 자체는 100ms 이내 완료 필수 |
+| **향후 개선** | gNB 코드 수정으로 scheduler metrics push 주기 단축 필요 | `app_usage_report_period`는 stdout metrics 전용, scheduler callback과 별개 |
+
+### 8.3 General Constraints
+
 - **Stage 3 trigger:** Invoke MobileNetV3 only for Deceptive/FN cases to stay within latency budget.
 - **MTU:** `sudo ip link set ens5 mtu 9000` must be set on all three instances before UHD streaming.
 - **Atomic model update:** Hot-reload model weights (threading.Lock + state_dict swap) without restarting the xApp process.
