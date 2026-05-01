@@ -400,6 +400,70 @@ class MSJCxApp:
 
         return changed
 
+    # ── A1 HTTP API (Training Manager rApp 연동) ──
+    def _a1_server_loop(self):
+        """A1-like HTTP API 서버. Training Manager → xApp 모델 업데이트 수신."""
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        import json as _json
+
+        xapp = self  # closure 참조
+
+        class A1Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                if self.path == "/a1/model_update":
+                    length = int(self.headers.get("Content-Length", 0))
+                    body = _json.loads(self.rfile.read(length)) if length else {}
+                    stage = body.get("stage", "stage1")
+                    print(f"[{_ts()}] [A1] MODEL_UPDATE 수신: stage={stage}, "
+                          f"method={body.get('method','?')}")
+                    # 즉시 핫 리로드 트리거
+                    xapp._reload_models_if_updated()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(_json.dumps({"status": "ok"}).encode())
+                elif self.path == "/a1/accuracy_report":
+                    # xApp → Training Manager (현재 상태 조회)
+                    stats = xapp._stats
+                    fn_window = stats["fn_window"]
+                    fn_rate = sum(fn_window) / max(len(fn_window), 1)
+                    resp = {
+                        "fn_rate": fn_rate,
+                        "total": stats["total"],
+                        "attacks": stats["attacks"],
+                        "normals": stats["normals"],
+                    }
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(_json.dumps(resp).encode())
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def do_GET(self):
+                if self.path == "/a1/health":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(_json.dumps({
+                        "status": "running",
+                        "total": xapp._stats["total"],
+                    }).encode())
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, format, *args):
+                pass  # suppress access logs
+
+        try:
+            server = HTTPServer(("0.0.0.0", 5000), A1Handler)
+            print(f"[{_ts()}] [A1] HTTP API 서버 시작: http://0.0.0.0:5000")
+            server.serve_forever()
+        except OSError as e:
+            print(f"[{_ts()}] [A1] 서버 시작 실패 (port 5000 사용 중?): {e}")
+
     def _hot_reload_loop(self):
         while not self._stop_evt.is_set():
             self._stop_evt.wait(self._reload_interval)
@@ -682,6 +746,11 @@ class MSJCxApp:
         reload_thread = threading.Thread(
             target=self._hot_reload_loop, daemon=True, name="hot-reload")
         reload_thread.start()
+
+        # A1 HTTP API 서버 (Training Manager rApp 연동)
+        a1_thread = threading.Thread(
+            target=self._a1_server_loop, daemon=True, name="a1-api")
+        a1_thread.start()
 
         if self._use_mock:
             print(f"[{_ts()}] [xApp] MockFlexRIC 모드 사용 "
