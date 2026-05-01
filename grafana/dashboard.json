@@ -1,0 +1,93 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "msjc-main",
+    "title": "MSJC Jamming Detection — 5G O-RAN xApp",
+    "tags": ["msjc", "5g", "oran"],
+    "timezone": "browser",
+    "refresh": "5s",
+    "time": { "from": "now-15m", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "title": "KPI Time Series (SINR / BLER / CQI)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 16, "x": 0, "y": 0 },
+        "datasource": { "type": "influxdb", "uid": "msjc-influx" },
+        "targets": [
+          {
+            "refId": "A",
+            "query": "from(bucket: \"jamming_kpi\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"detection\")\n  |> filter(fn: (r) => r._field == \"rssi\" or r._field == \"spectral_flatness\" or r._field == \"s1_confidence\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "short" },
+          "overrides": [
+            { "matcher": { "id": "byName", "options": "rssi" }, "properties": [{ "id": "displayName", "value": "SINR (dB)" }] },
+            { "matcher": { "id": "byName", "options": "spectral_flatness" }, "properties": [{ "id": "displayName", "value": "BLER" }] },
+            { "matcher": { "id": "byName", "options": "s1_confidence" }, "properties": [{ "id": "displayName", "value": "S1 Confidence" }] }
+          ]
+        }
+      },
+      {
+        "id": 2,
+        "title": "Detection Verdict Distribution",
+        "type": "piechart",
+        "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+        "datasource": { "type": "influxdb", "uid": "msjc-influx" },
+        "targets": [
+          {
+            "refId": "A",
+            "query": "from(bucket: \"jamming_kpi\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"detection\" and r._field == \"latency_ms\")\n  |> group(columns: [\"final_verdict\"])\n  |> count()\n  |> group()"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Stage 1 Label Distribution",
+        "type": "barchart",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "datasource": { "type": "influxdb", "uid": "msjc-influx" },
+        "targets": [
+          {
+            "refId": "A",
+            "query": "from(bucket: \"jamming_kpi\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"detection\" and r._field == \"latency_ms\")\n  |> group(columns: [\"s1_label\"])\n  |> count()\n  |> group()"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Inference Latency (ms)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "datasource": { "type": "influxdb", "uid": "msjc-influx" },
+        "targets": [
+          {
+            "refId": "A",
+            "query": "from(bucket: \"jamming_kpi\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"detection\" and r._field == \"latency_ms\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "ms", "thresholds": { "mode": "absolute", "steps": [{ "value": 0, "color": "green" }, { "value": 50, "color": "yellow" }, { "value": 100, "color": "red" }] } }
+        }
+      },
+      {
+        "id": 5,
+        "title": "GMM Auto-Labels (Labeler rApp)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+        "datasource": { "type": "influxdb", "uid": "msjc-influx" },
+        "targets": [
+          {
+            "refId": "A",
+            "query": "from(bucket: \"jamming_kpi\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"labeled_kpis\")\n  |> filter(fn: (r) => r._field == \"gmm_prob_attack\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "percentunit", "displayName": "GMM Attack Probability" }
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}

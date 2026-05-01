@@ -1,0 +1,13 @@
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB-MSJC
+    type: influxdb
+    access: proxy
+    url: http://localhost:8086
+    jsonData:
+      version: Flux
+      organization: msjc
+      defaultBucket: jamming_kpi
+    secureJsonData:
+      token: DHC1g0lVyoUHh_Qs5bYexl6BL7IeNHNjJ77Uu4xBPHAMFEUjpofw7QlN8W0S9v66JRd4f4OMS64SEYR9nq_BNA==
