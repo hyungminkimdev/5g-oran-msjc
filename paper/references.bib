@@ -1,8 +1,12 @@
-% ===== Core References (MSJC direct basis) =====
+% ============================================================
+% MSJC 논문 참고문헌 — PDF 직접 확인된 것만 포함
+% ============================================================
+
+% ----- Core: MSJC 직접 기반 -----
 
 @inproceedings{hachimi2020,
   author    = {Hachimi, Mohamed and Kaddoum, Georges and Gagnon, Ghyslain},
-  title     = {Multi-stage Jamming Attacks Detection using Deep Learning Combined with Kernelized Support Vector Machine in 5G Cloud-RAN},
+  title     = {Multi-stage Jamming Attacks Detection using Deep Learning Combined with Kernelized Support Vector Machine in {5G} Cloud-{RAN}},
   booktitle = {IEEE Global Communications Conference (GLOBECOM)},
   year      = {2020},
   pages     = {1--6},
@@ -16,140 +20,219 @@
   year    = {2025},
 }
 
-% ===== O-RAN Architecture & xApps =====
-
-@techreport{oran_wg1,
-  author      = {{O-RAN Alliance}},
-  title       = {{O-RAN} Architecture Description},
-  institution = {O-RAN Alliance},
-  number      = {O-RAN.WG1.OAD-R003-v12.00},
-  year        = {2024},
-}
-
-@inproceedings{polese2023,
-  author    = {Polese, Michele and Bonati, Leonardo and D'Oro, Salvatore and Basagni, Stefano and Melodia, Tommaso},
-  title     = {Understanding {O-RAN}: Architecture, Interfaces, Algorithms, Security, and Research Challenges},
-  booktitle = {IEEE Communications Surveys \& Tutorials},
-  year      = {2023},
-  volume    = {25},
-  number    = {2},
-  pages     = {1376--1411},
-}
-
-@article{reusmuns2024,
-  author    = {Reus-Muns, Guillem and Upadhyaya, Pratheek S. and Demir, Utku and Stephenson, Nathan and Soltani, Nasim and Shah, Vijay K. and Chowdhury, Kaushik R.},
-  title     = {{SenseORAN}: {O-RAN}-Based Radar Detection in the {CBRS} Band},
-  journal   = {IEEE Journal on Selected Areas in Communications},
-  year      = {2024},
-  volume    = {42},
-  number    = {2},
-  pages     = {326--340},
-  doi       = {10.1109/JSAC.2023.3336152},
-}
-
-@inproceedings{lacava2023,
-  author    = {Lacava, Andrea and Polese, Michele and Sivaraj, Rajarajan and Melodia, Tommaso},
-  title     = {Programmable and Customized Intelligence for Traffic Steering in {5G} Networks Using Open {RAN} Architectures},
-  booktitle = {IEEE Transactions on Mobile Computing},
-  year      = {2023},
-}
-
-% ===== Jamming Detection & Anti-Jamming =====
+% ----- Jamming Surveys & Classification -----
 
 @article{pirayesh2022,
   author  = {Pirayesh, Hossein and Zeng, Huacheng},
   title   = {Jamming Attacks and Anti-Jamming Strategies in Wireless Networks: A Comprehensive Survey},
   journal = {IEEE Communications Surveys \& Tutorials},
-  year    = {2022},
   volume  = {24},
   number  = {2},
   pages   = {767--809},
+  year    = {2022},
+  doi     = {10.1109/COMST.2022.3159185},
 }
 
-@inproceedings{erpek2018,
-  author    = {Erpek, Tugba and Sagduyu, Yalin E. and Shi, Yi},
-  title     = {Deep Learning for Launching and Mitigating Wireless Jamming Attacks},
-  booktitle = {IEEE Transactions on Cognitive Communications and Networking},
-  year      = {2019},
-  volume    = {5},
-  number    = {1},
-  pages     = {2--14},
-}
-
-@article{xu2005,
-  author  = {Xu, Wenyuan and Trappe, Wade and Zhang, Yanyong and Wood, Timothy},
-  title   = {The Feasibility of Launching and Detecting Jamming Attacks in Wireless Networks},
-  journal = {ACM MobiHoc},
-  year    = {2005},
-  pages   = {46--57},
-}
-
-@inproceedings{grover2014,
-  author    = {Grover, Kanika and Lim, Alvin and Yang, Qing},
-  title     = {Jamming and Anti-Jamming Techniques in Wireless Networks: A Survey},
-  booktitle = {Int. Journal of Ad Hoc and Ubiquitous Computing},
-  year      = {2014},
-  volume    = {17},
-  number    = {4},
-  pages     = {197--215},
-}
-
-% ===== ML for 5G Security =====
-
-@article{sagduyu2023,
-  author  = {Sagduyu, Yalin E. and Erpek, Tugba and Shi, Yi},
-  title   = {Adversarial Machine Learning for {5G} Communications Security},
-  journal = {IEEE Communications Magazine},
-  year    = {2023},
-}
-
-@inproceedings{arjoune2020,
-  author    = {Arjoune, Youness and Faruque, Saleh},
-  title     = {Smart Jamming Attacks in {5G New Radio}: A Review},
-  booktitle = {IEEE Int. Conf. on Sensing, Communication, and Networking (SECON)},
-  year      = {2020},
-}
-
-% ===== srsRAN & Testbed =====
-
-@inproceedings{gomez2016,
-  author    = {Gomez-Miguelez, Ismael and Garcia-Saavedra, Andres and Sutton, Paul D. and Serrano, Pablo and Cano, Cristina and Leith, Douglas J.},
-  title     = {{srsLTE}: An Open-Source Platform for {LTE} Evolution and Experimentation},
-  booktitle = {ACM WiNTECH},
-  year      = {2016},
-}
-
-@article{srsran2024,
-  author  = {{Software Radio Systems}},
-  title   = {{srsRAN} Project: Open-Source {5G} {RAN}},
+@article{savadatti2024,
+  author  = {Savadatti, Shreya and Dhariwal, Sakshi Kuldeep and Krishnamoorthy, Shruthi and Delhibabu, Radhakrishnan},
+  title   = {An Extensive Classification of {5G} Network Jamming Attacks},
+  journal = {Security and Communication Networks},
+  volume  = {2024},
+  pages   = {2883082},
   year    = {2024},
-  note    = {\url{https://github.com/srsran/srsRAN_Project}},
+  doi     = {10.1155/2024/2883082},
 }
 
-% ===== MobileNetV3 =====
+@article{harvanek2024,
+  author  = {Harvanek, Michal and Bolcek, Jan and Kufa, Jan and Polak, Ladislav and Simka, Marek and Marsalek, Roman},
+  title   = {Survey on {5G} Physical Layer Security Threats and Countermeasures},
+  journal = {Sensors},
+  volume  = {24},
+  number  = {17},
+  pages   = {5523},
+  year    = {2024},
+  doi     = {10.3390/s24175523},
+}
+
+% ----- ML-based Jamming Detection -----
+
+@article{jere2024,
+  author  = {Jere, Shashank and Wang, Ying and Aryendu, Ishan and Dayekh, Shehadi and Liu, Lingjia},
+  title   = {Bayesian Inference-Assisted Machine Learning for Near Real-Time Jamming Detection and Classification in {5G} New Radio ({NR})},
+  journal = {IEEE Transactions on Wireless Communications},
+  volume  = {23},
+  number  = {7},
+  pages   = {7043--7058},
+  year    = {2024},
+  doi     = {10.1109/TWC.2023.3337058},
+}
+
+% ----- O-RAN Architecture -----
+
+@article{polese2023,
+  author  = {Polese, Michele and Bonati, Leonardo and D'Oro, Salvatore and Basagni, Stefano and Melodia, Tommaso},
+  title   = {Understanding {O-RAN}: Architecture, Interfaces, Algorithms, Security, and Research Challenges},
+  journal = {IEEE Communications Surveys \& Tutorials},
+  volume  = {25},
+  number  = {2},
+  pages   = {1376--1411},
+  year    = {2023},
+  doi     = {10.1109/COMST.2023.3239220},
+}
+
+@article{abdalla2022,
+  author  = {Abdalla, Aly S. and Upadhyaya, Pratheek S. and Shah, Vijay K. and Marojevic, Vuk},
+  title   = {Toward Next Generation Open Radio Access Networks: What {O-RAN} Can and Cannot Do!},
+  journal = {IEEE Network},
+  volume  = {36},
+  number  = {6},
+  pages   = {206--213},
+  year    = {2022},
+  doi     = {10.1109/MNET.108.2100659},
+}
+
+@article{marinova2024,
+  author  = {Marinova, Simona and Leon-Garcia, Alberto},
+  title   = {Intelligent {O-RAN} Beyond {5G}: Architecture, Use Cases, Challenges, and Opportunities},
+  journal = {IEEE Access},
+  volume  = {12},
+  pages   = {27088--27121},
+  year    = {2024},
+  doi     = {10.1109/ACCESS.2024.3367289},
+}
+
+% ----- O-RAN xApp Design & Testbeds -----
+
+@article{santos2025,
+  author  = {Santos, Joao F. and Huff, Alexandre and Campos, Daniel and Cardoso, Kleber V. and Both, Cristiano B. and DaSilva, Luiz A.},
+  title   = {Managing {O-RAN} Networks: {xApp} Development from Zero to Hero},
+  journal = {IEEE Communications Surveys \& Tutorials},
+  year    = {2025},
+  doi     = {10.1109/COMST.2025.3539687},
+  note    = {Early Access},
+}
+
+@article{hoffmann2024,
+  author  = {Hoffmann, Marcin and Janji, Salim and Samorzewski, Adam and Ku{\l}acz, {\L}ukasz and Adamczyk, Cezary and Dryja{\'n}ski, Marcin and Kryszkiewicz, Pawel and Kliks, Adrian and Bogucka, Hanna},
+  title   = {Open {RAN} {xApps} Design and Evaluation: Lessons Learnt and Identified Challenges},
+  journal = {IEEE Journal on Selected Areas in Communications},
+  volume  = {42},
+  number  = {2},
+  pages   = {473--491},
+  year    = {2024},
+  doi     = {10.1109/JSAC.2023.3336190},
+}
+
+@article{dasilva2025,
+  author  = {da Silva, Aloizio and Roy Chowdhury, Mayukh and Sathish, Aditya and Tripathi, Asheesh and Midkiff, Scott F. and da Silva, Luiz A.},
+  title   = {{CCI xG Testbed}: An {O-RAN} Based Platform for Future Wireless Network Experimentation},
+  journal = {IEEE Communications Magazine},
+  volume  = {63},
+  number  = {2},
+  pages   = {62--68},
+  year    = {2025},
+  doi     = {10.1109/MCOM.001.2400322},
+}
+
+@inproceedings{stephenson2023,
+  author    = {Stephenson, Nathan H. and Chiejina, Azuka J. and Kabigting, Nathaniel B. and Shah, Vijay K.},
+  title     = {Demonstration of Closed Loop {AI}-Driven {RAN} Controllers Using {O-RAN} {SDR} Testbed},
+  booktitle = {IEEE Military Communications Conference (MILCOM)},
+  year      = {2023},
+  pages     = {1--6},
+  doi       = {10.1109/MILCOM58377.2023.10356330},
+}
+
+% ----- O-RAN Jamming / Anomaly Detection xApps -----
+
+@inproceedings{kryszkiewicz2023,
+  author    = {Kryszkiewicz, Pawel and Hoffmann, Marcin},
+  title     = {Open {RAN} for Detection of a Jamming Attack in a {5G} Network},
+  booktitle = {IEEE 97th Vehicular Technology Conference (VTC2023-Spring)},
+  year      = {2023},
+  pages     = {1--5},
+  doi       = {10.1109/VTC2023-Spring57618.2023.10201067},
+}
+
+@inproceedings{moore2025,
+  author    = {Moore, Joshua and Abdalla, Aly Sabri and Ueltschey, Charles and Marojevic, Vuk},
+  title     = {Demonstrating Jamming Mitigation in {O-RAN} via {AI} enabled Intrusion Detection and Secure Slicing xApps},
+  booktitle = {IEEE Military Communications Conference (MILCOM)},
+  year      = {2025},
+  pages     = {891--892},
+  doi       = {10.1109/MILCOM64451.2025.11310542},
+}
+
+@article{bogucka2025,
+  author  = {Bogucka, Hanna and Hoffmann, Marcin and Kryszkiewicz, Pawe{\l} and Ku{\l}acz, {\L}ukasz},
+  title   = {An Open-{RAN} Testbed for Detecting and Mitigating Radio-Access Anomalies},
+  journal = {IEEE Communications Magazine},
+  year    = {2025},
+  doi     = {10.1109/MCOM.003.2400513},
+}
+
+@article{dimou2025,
+  author  = {Dimou, Stavros and Noubir, Guevara},
+  title   = {{ARGOS}: Anomaly Recognition and Guarding through {O-RAN} Sensing},
+  journal = {arXiv preprint arXiv:2506.06916},
+  year    = {2025},
+}
+
+@inproceedings{pazperez2025,
+  author    = {Paz-P{\'e}rez, Aurora and Su{\'a}rez G{\'o}mez, Julio and Valera S{\'a}nchez, F. Javier and Escudero-Garz{\'a}s, J. Joaqu{\'i}n},
+  title     = {Design and Implementation of an {xApp}-based System for Jamming and Interference Mitigation},
+  booktitle = {IEEE International Symposium on Networks, Computers and Communications (ISNCC)},
+  year      = {2025},
+  doi       = {10.1109/ISNCC66965.2025.11250457},
+}
+
+% ----- Spectrogram / I/Q ML -----
+
+@article{reusmuns2024,
+  author  = {Reus-Muns, Guillem and Upadhyaya, Pratheek S. and Demir, Utku and Stephenson, Nathan and Soltani, Nasim and Shah, Vijay K. and Chowdhury, Kaushik R.},
+  title   = {{SenseORAN}: {O-RAN}-Based Radar Detection in the {CBRS} Band},
+  journal = {IEEE Journal on Selected Areas in Communications},
+  volume  = {42},
+  number  = {2},
+  pages   = {326--340},
+  year    = {2024},
+  doi     = {10.1109/JSAC.2023.3336152},
+}
+
+% ----- ML Models -----
 
 @inproceedings{howard2019,
-  author    = {Howard, Andrew and Sandler, Mark and Chen, Bo and others},
+  author    = {Howard, Andrew and Sandler, Mark and Chu, Grace and Chen, Liang-Chieh and Chen, Bo and Tan, Mingxing and Wang, Weijun and Zhu, Yukun and Pang, Ruoming and Vasudevan, Vijay and Le, Quoc V. and Adam, Hartwig},
   title     = {Searching for {MobileNetV3}},
-  booktitle = {IEEE/CVF Int. Conf. on Computer Vision (ICCV)},
+  booktitle = {IEEE/CVF International Conference on Computer Vision (ICCV)},
   year      = {2019},
   pages     = {1314--1324},
+  doi       = {10.1109/ICCV.2019.00140},
 }
 
-% ===== GMM / Unsupervised Learning =====
+% ----- O-RAN Security -----
 
-@book{bishop2006,
-  author    = {Bishop, Christopher M.},
-  title     = {Pattern Recognition and Machine Learning},
-  publisher = {Springer},
-  year      = {2006},
+@article{kakani2025,
+  author  = {Kakani, Prudhvi Kumar and Habibi, Mohammad Asif and Chavva Balannagari, Manjunath Reddy and Costa-P{\'e}rez, Xavier and Schotten, Hans D.},
+  title   = {Mitigating {ML}-Driven Adversarial Attacks on {xApps} Using Dynamic Defense Mechanisms},
+  journal = {IEEE Open Journal of the Communications Society},
+  volume  = {6},
+  pages   = {6912--6930},
+  year    = {2025},
+  doi     = {10.1109/OJCOMS.2025.3602200},
 }
 
-% ===== ClearML =====
+@inproceedings{rumesh2024,
+  author    = {Rumesh, Yasintha and Attanayaka, Dinaj and Porambage, Pawani and Pinola, Jarno and Groen, Joshua and Chowdhury, Kaushik},
+  title     = {Federated Learning for Anomaly Detection in Open {RAN}: Security Architecture Within a Digital Twin},
+  booktitle = {EuCNC \& 6G Summit},
+  year      = {2024},
+}
 
-@misc{clearml2024,
-  author = {{ClearML}},
-  title  = {{ClearML}: End-to-End {MLOps} Platform},
-  year   = {2024},
-  note   = {\url{https://clear.ml}},
+@article{shahid2024,
+  author  = {Shahid, Muhammad Farhan and Mehmood, Khuram and Mohsin, Mujahid and Saleem, Ammar and Yaqoob, Sohaib and Bashir, Waqas},
+  title   = {Taxonomy of Physical Layer Jamming Techniques and Strategies for Security Enhancement in Wireless Communication: A Comprehensive Survey},
+  journal = {TechRxiv Preprint},
+  year    = {2024},
+  doi     = {10.36227/techrxiv.172425846.66605015/v1},
 }
