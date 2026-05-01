@@ -65,7 +65,7 @@ Traditional jamming detection relies on energy-based metrics such as received si
 Hachimi et al.~\cite{hachimi2020} proposed the original Multi-Stage Jamming Classification (MSJC) framework combining an MLP, KSVM, and MobileNetV3 for spectrogram-based protocol-aware classification. While achieving 94.51\% accuracy, their evaluation was limited to simulated data without O-RAN integration. Erpek et al.~\cite{erpek2018} demonstrated deep learning for both launching and detecting jamming attacks, but in a non-5G context. Sagduyu et al.~\cite{sagduyu2023} explored adversarial ML for 5G security, focusing on evasion attacks rather than detection deployment.
 
 \subsection{O-RAN Security and xApps}
-The O-RAN architecture~\cite{oran_wg1} provides the Near-RT RIC as a platform for hosting xApps that process E2SM-KPM telemetry and issue E2SM-RC control actions. Lacava et al.~\cite{lacava2023} demonstrated traffic steering xApps on real testbeds, but jamming-specific xApps on real O-RAN deployments remain scarce. Polese et al.~\cite{polese2023} identify security as a key O-RAN research challenge.
+The O-RAN architecture~\cite{oran_wg1} provides the Near-RT RIC as a platform for hosting xApps that process E2SM-KPM telemetry and issue E2SM-RC control actions. Lacava et al.~\cite{lacava2023} demonstrated traffic steering xApps on real testbeds. Reus-Muns et al.~\cite{reusmuns2024} proposed SenseORAN, an xApp that uses YOLO-based spectrogram classification of I/Q samples for radar detection in the CBRS band, demonstrating the viability of spectrogram-based ML on O-RAN infrastructure. However, jamming-specific xApps with protocol-aware classification on real O-RAN deployments remain scarce. Polese et al.~\cite{polese2023} identify security as a key O-RAN research challenge.
 
 \subsection{Self-Adaptive MLOps}
 Rahman et al.~\cite{rahman2025} proposed SAJD, a self-adaptive jamming detection framework using GMM-based unsupervised labeling, ClearML-driven retraining, and A1-interface model deployment. However, SAJD is limited to binary (jamming/no-jamming) classification and validated only in simulation. Our work extends this to 5-class hierarchical classification with protocol-aware sub-typing, validated on a real 5G testbed.
@@ -137,7 +137,7 @@ Per-sample classification cannot detect intermittent attacks where individual sa
 
 \subsection{Stage 3: MobileNetV3 Spectrogram Classification}
 
-For protocol-aware classification, raw I/Q snapshots (16,384 complex samples captured via passive USRP reception) are converted to 224$\times$224 spectrograms and classified by MobileNetV3-Small~\cite{howard2019} (1.52M parameters) into four sub-types. The model is first trained on synthetic spectrograms and then fine-tuned with 200 real I/Q captures to bridge the sim-to-real domain gap.
+For protocol-aware classification, raw I/Q snapshots (16,384 complex samples captured via passive USRP reception) are converted to 224$\times$224 spectrograms and classified by MobileNetV3-Small~\cite{howard2019} (1.52M parameters) into four sub-types. This spectrogram-based approach builds on the demonstrated effectiveness of I/Q spectrogram analysis in O-RAN xApps~\cite{reusmuns2024}. The model is first trained on synthetic spectrograms and then fine-tuned with 200 real I/Q captures to bridge the sim-to-real domain gap.
 
 \subsection{GMM Auto-Labeling}
 
