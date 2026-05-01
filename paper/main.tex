@@ -46,11 +46,11 @@ Existing ML-based jamming detection approaches suffer from two key limitations. 
 In this paper, we present MSJC (Multi-Stage Jamming Classification), a Near-RT RIC xApp validated on the CCI~xG Testbed~\cite{dasilva2025}. Our contributions are:
 
 \begin{enumerate}
-    \item \textbf{3-Stage Classification Cascade:} An MLP for fast 5-class KPI detection, a sliding-window KSVM for temporal false-negative recovery, and a MobileNetV3~\cite{howard2019} for I/Q spectrogram-based protocol-aware classification---achieving 100\% detection across seven jamming modes with $\leq$73\,ms latency.
+    \item \textbf{3-Stage Classification Cascade:} Extending Hachimi et al.'s two-stage MLP$+$KSVM design~\cite{hachimi2020} from C-RAN to O-RAN, we add a third stage (MobileNetV3~\cite{howard2019}) for protocol-aware spectrogram classification, redesign the KSVM with sliding-window temporal features, expand from 4 to 7 jamming modes, and validate on real 5G hardware---achieving 100\% detection with $\leq$73\,ms latency.
 
     \item \textbf{Sliding-Window Statistical Features:} A 12-dimensional feature vector extracted from 15-second KPI windows that captures temporal patterns (BLER variance, periodicity, state transitions) invisible to per-sample classifiers, enabling detection of intermittent Random and Reactive jamming.
 
-    \item \textbf{Closed-Loop MLOps on Real O-RAN:} GMM-based Labeler rApp and Training Manager rApp with A1-interface model deployment, demonstrated end-to-end on a real 5G testbed with srsRAN, FlexRIC, and Open5GS.
+    \item \textbf{Closed-Loop MLOps on Real O-RAN:} Adopting Rahman et al.'s SAJD architecture~\cite{rahman2025}, we implement GMM-based Labeler rApp and Training Manager rApp and extend them from binary detection to multi-class classification, with end-to-end validation on a real 5G testbed---the first such demonstration on actual hardware.
 \end{enumerate}
 
 
@@ -64,7 +64,7 @@ Pirayesh and Zeng~\cite{pirayesh2022} provide a comprehensive survey of jamming 
 
 \subsection{ML-Based Jamming Classification}
 
-Hachimi et al.~\cite{hachimi2020} proposed the original Multi-Stage Jamming Classification (MSJC) framework combining an MLP, KSVM, and MobileNetV3 for spectrogram-based protocol-aware classification, achieving 94.51\% accuracy on simulated data. Jere et al.~\cite{jere2024} demonstrated Bayesian inference-assisted ML for near-real-time jamming detection on a 5G NR testbed using cross-layer KPI data, achieving AUC $>$0.988 with 180\,ms detection delay. However, neither work integrates with O-RAN interfaces or supports adaptive retraining.
+Hachimi et al.~\cite{hachimi2020} proposed a two-stage ML-based intrusion detection system for 5G Cloud-RAN (C-RAN), combining an MLP for 4-class jamming classification (constant, deceptive, random, reactive) with a Kernelized SVM (KSVM) as a second stage to reduce false negatives. Their system achieved 94.51\% accuracy on the WSN-DS dataset but was limited to: (i)~simulated data without real RF validation, (ii)~C-RAN architecture without O-RAN integration, and (iii)~per-sample classification that cannot capture temporal attack patterns. Our work extends Hachimi's two-stage MLP$+$KSVM concept to a three-stage cascade by adding MobileNetV3~\cite{howard2019} for protocol-aware spectrogram classification (PSS, PDCCH, DMRS), redesigning the KSVM with sliding-window temporal statistics, expanding to seven jamming modes, and deploying on a real 5G O-RAN testbed with E2SM-KPM telemetry. Jere et al.~\cite{jere2024} demonstrated Bayesian inference-assisted ML for near-real-time jamming detection on a 5G NR testbed, achieving AUC $>$0.988 with 180\,ms detection delay. However, their work does not integrate with O-RAN interfaces or support protocol-aware sub-classification.
 
 \subsection{O-RAN-Based Security xApps}
 
@@ -72,7 +72,7 @@ The O-RAN architecture~\cite{polese2023} enables deploying security functions as
 
 \subsection{Closed-Loop MLOps for O-RAN}
 
-Stephenson et al.~\cite{stephenson2023} demonstrated closed-loop AI-driven RAN control on an SDR testbed at MILCOM~2023. Rahman et al.~\cite{rahman2025} proposed SAJD with GMM-based unsupervised labeling and ClearML-driven retraining, but limited to binary classification in simulation. Marinova and Leon-Garcia~\cite{marinova2024} survey intelligent O-RAN architectures, highlighting AI/ML workflow automation as a key research direction. Kakani et al.~\cite{kakani2025} address the complementary problem of adversarial attacks against xApp ML models, while Rumesh et al.~\cite{rumesh2024} explore federated learning for anomaly detection in O-RAN digital twins. Our work extends these foundations by combining multi-class hierarchical classification with protocol-aware sub-typing and automated retraining, all validated on a real testbed.
+Stephenson et al.~\cite{stephenson2023} demonstrated closed-loop AI-driven RAN control on an SDR testbed at MILCOM~2023. Rahman et al.~\cite{rahman2025} proposed SAJD, a self-adaptive jamming \textit{detection} framework for O-RAN featuring a GMM-based Labeler rApp for unsupervised binary labeling, a Training Manager rApp with ClearML-driven retraining, and A1-interface model deployment. However, SAJD is limited to binary detection (jamming present/absent) without multi-class classification, and was validated only in simulation. Our work adopts Rahman's closed-loop MLOps architecture (Labeler rApp, Training Manager, A1 interface) and extends it from binary detection to hierarchical 7-class classification with protocol-aware sub-typing, all validated on a real testbed. Marinova and Leon-Garcia~\cite{marinova2024} survey intelligent O-RAN architectures, highlighting AI/ML workflow automation as a key research direction. Kakani et al.~\cite{kakani2025} address the complementary problem of adversarial attacks against xApp ML models, while Rumesh et al.~\cite{rumesh2024} explore federated learning for anomaly detection in O-RAN digital twins.
 
 
 % ================================================================
@@ -103,10 +103,10 @@ The xApp implements a three-stage cascade optimized for the Near-RT RIC's 100\,m
 
 \subsection{Closed-Loop MLOps}
 
-Two Non-RT RIC rApps automate the ML lifecycle, following the SAJD architecture~\cite{rahman2025}:
+Two Non-RT RIC rApps automate the ML lifecycle, adopting the SAJD closed-loop architecture proposed by Rahman et al.~\cite{rahman2025} and extending it from binary detection to multi-class classification:
 \begin{itemize}
-    \item \textbf{Labeler rApp:} GMM-based unsupervised binary labeling with ARC drift detection ($\tau = 0.0004$).
-    \item \textbf{Training Manager rApp:} Monitors accuracy via InfluxDB, triggers retraining below 30\%, deploys models via A1 HTTP interface.
+    \item \textbf{Labeler rApp:} Implements Rahman's GMM-based unsupervised labeling pipeline (moving average smoothing $\rightarrow$ ARC drift detection with $\tau = 0.0004$ $\rightarrow$ 2-component GMM clustering) to generate binary Normal/Attack annotations from raw KPI telemetry.
+    \item \textbf{Training Manager rApp:} Monitors xApp accuracy via InfluxDB, triggers Stage~1 MLP retraining when accuracy drops below 30\%, and deploys updated models via an A1-like HTTP interface---extending Rahman's ClearML-based orchestration with a standalone fallback mode.
 \end{itemize}
 
 
@@ -120,7 +120,7 @@ Each E2SM-KPM report is mapped to an 8-dimensional feature vector: RSRP (PUSCH S
 
 \subsection{Stage 1: MLP 5-Class Classifier}
 
-The MLP consists of fully-connected layers (8$\rightarrow$256$\rightarrow$128$\rightarrow$64$\rightarrow$5) with BatchNorm, ReLU, and Dropout~(0.3), totaling 44,677 parameters. Training uses synthetic KPI profiles calibrated to real testbed measurements, with clean-looking attack samples filtered to prevent Normal/Deceptive overlap.
+Following Hachimi et al.'s two-stage design~\cite{hachimi2020}, our Stage~1 uses an MLP as the first-pass classifier. We extend the original 4-class scheme to 5~classes (adding Deceptive) and replace raw I/Q features with 8-dimensional E2SM-KPM metrics. The architecture (8$\rightarrow$256$\rightarrow$128$\rightarrow$64$\rightarrow$5) with BatchNorm, ReLU, and Dropout~(0.3) totals 44,677 parameters. Training uses synthetic KPI profiles calibrated to real testbed measurements, with clean-looking attack samples filtered to prevent Normal/Deceptive overlap.
 
 \subsection{Stage 2: Sliding-Window KSVM}
 
@@ -130,7 +130,7 @@ We extract 12 statistical features from $W=15$ consecutive KPI reports:
 \mathbf{f} = [\mu_b, \sigma^2_b, b_{\max}, r_b, \mu_s, \sigma^2_s, s_{\min}, \sigma^2_c, c_{\min}, \mu_n, \rho_b, \tau_b]
 \end{equation}
 
-\noindent where $b$, $s$, $c$, $n$ denote BLER, SINR, CQI, NACK; $\rho_b$ is BLER autocorrelation (periodicity); $\tau_b$ counts BLER state transitions. The KSVM (RBF, $C$=10) is trained directly on real testbed windows.
+\noindent where $b$, $s$, $c$, $n$ denote BLER, SINR, CQI, NACK; $\rho_b$ is BLER autocorrelation (periodicity); $\tau_b$ counts BLER state transitions. While Hachimi et al.~\cite{hachimi2020} used a per-sample KSVM as a binary false-negative recheck, our sliding-window approach captures temporal dynamics---BLER variance, periodicity, and state transitions---that are invisible to single-sample analysis. The KSVM (RBF, $C$=10) is trained directly on real testbed windows rather than simulated data.
 
 \subsection{Stage 3: MobileNetV3 Protocol Classification}
 
@@ -237,7 +237,7 @@ PROTOCOL\_AWARE & S1$\rightarrow$S3 & 40--73 \\
 
 \subsection{Comparison with Prior Work}
 
-Table~\ref{tab:comparison} positions MSJC against the most closely related works. Unlike Hachimi et al.~\cite{hachimi2020}, our system runs on a real testbed. Unlike Jere et al.~\cite{jere2024}, we integrate with O-RAN E2 interfaces and support protocol-aware sub-classification. Unlike Moore et al.~\cite{moore2025} and Paz-P\'{e}rez et al.~\cite{pazperez2025}, we implement hierarchical multi-class classification with temporal sliding-window features and automated closed-loop retraining.
+Table~\ref{tab:comparison} positions MSJC against the most closely related works. Hachimi et al.~\cite{hachimi2020} established the MLP$+$KSVM cascade but in C-RAN with simulated data and without protocol-aware classification. Jere et al.~\cite{jere2024} validated ML jamming detection on real 5G NR but without O-RAN integration. Moore et al.~\cite{moore2025} and Paz-P\'{e}rez et al.~\cite{pazperez2025} demonstrated O-RAN xApp-based jamming mitigation but with binary detection only. Rahman et al.~\cite{rahman2025} proposed the closed-loop MLOps architecture but limited to binary detection in simulation. Our MSJC uniquely combines all capabilities: real testbed, O-RAN xApp, multi-class hierarchical classification with protocol-aware sub-typing, sliding-window temporal features, and closed-loop retraining.
 
 \begin{table}[t]
 \centering
