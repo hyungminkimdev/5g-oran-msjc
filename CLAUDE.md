@@ -166,12 +166,19 @@ Stage 3 MobileNetV3 still uses **2D spectrograms**, but sourced from:
 ├── xapp_msjc.py               ← Main O-RAN xApp (FlexRIC Python SDK)
 │
 ├── stage1_mlp.py              ← MLP 5-class classifier (KPI features)
-├── stage2_ksvm.py             ← KSVM binary False-Negative recheck (KPI features)
-├── stage3_mobilenet.py        ← MobileNetV3 spectrogram (Protocol-Aware)
+├── stage2_ksvm.py             ← KSVM sliding window KSVM (W=15, 12-dim 통계)
+├── stage3_mobilenet.py        ← MobileNetV3 spectrogram (Protocol-Aware, 실측 I/Q fine-tuned)
 │
-├── kpi_feature_extractor.py   ← E2SM-KPM report → 8-dim numpy feature vector
+├── kpi_feature_extractor.py   ← E2SM-KPM report → 8-dim feature vector + CQI scale 보정
 ├── iq_snapshot.py             ← On-demand I/Q capture for Stage 3 (via srsRAN API)
 ├── influx_logger.py           ← Async InfluxDB KPI + detection event logger
+│
+├── labeler_rapp.py            ← [Phase 6] Non-RT RIC Labeler rApp (GMM 비지도 레이블링)
+├── training_manager_rapp.py   ← [Phase 6] Non-RT RIC Training Manager rApp (재학습 오케스트레이션)
+│
+├── grafana/
+│   ├── datasource.yaml        ← InfluxDB Flux 데이터소스 프로비저닝
+│   └── dashboard.json         ← MSJC 5-panel 대시보드 (KPI/Verdict/Label/Latency/GMM)
 │
 ├── patches/
 │   ├── 0001-Add-NR-SA-patches-...patch   ← srsRAN gNB band n78 패치
@@ -181,10 +188,13 @@ Stage 3 MobileNetV3 still uses **2D spectrograms**, but sourced from:
     ├── start_gnb.sh           ← gNB 단독 시작 (taskset+chrt)
     ├── start_stack.sh         ← 전체 스택 자동화 (5GC→RIC→gNB→UE→KPM)
     ├── run-ue-safe.sh         ← UE 안전 실행 (timeout+reject 감시)
-    ├── jammer_sweep.sh        ← 재머 파라미터 sweep 자동화
-    ├── kpm_collector.py       ← KPM 데이터 CSV 수집기
     ├── jammer.py              ← 7-mode jammer (testbed validation tool)
-    └── collect_and_retrain.py ← Manual data collection + Stage1 retraining
+    ├── kpm_collector.py       ← KPM 데이터 CSV 수집기 (E2SM-KPM)
+    ├── gnb_kpm_parser.sh      ← gNB stdout KPM 파싱 CSV 출력
+    ├── collect_all_modes.sh   ← 전모드 KPM 자동 수집 (jammer SSH 제어)
+    ├── iq_capture.py          ← [Phase 5] Instance-1 passive RX I/Q 캡처
+    ├── collect_iq_all.sh      ← [Phase 5] 전모드 I/Q 자동 수집
+    └── demo_closedloop.sh     ← [Phase 6] Closed-loop E2E 데모 스크립트
 ```
 
 ---
@@ -432,10 +442,12 @@ All ML components log to ClearML:
 |-----------|-------------------|--------|
 | Stage 1 MLP | `Task.init()`, artifact upload | **Implemented** |
 | Stage 2 KSVM | `Task.init()`, artifact upload | **Implemented** |
-| Stage 3 MobileNetV3 | `Task.init()`, artifact upload | **To do** |
+| Stage 3 MobileNetV3 | `Task.init()`, artifact upload | **Implemented** |
 | xApp FN trigger | `Task.create()` + `Task.enqueue()` | **Implemented** |
-| Training Manager rApp | Clone template, enqueue, monitor | **To do** |
-| Labeler rApp | Log labeling stats | **To do** |
+| Training Manager rApp | Clone/enqueue + Standalone fallback | **Implemented** |
+| Labeler rApp | GMM labeling + InfluxDB R/W | **Implemented** |
+| xApp A1 API | HTTP :5000 MODEL_UPDATE/ACCURACY_REPORT | **Implemented** |
+| Grafana 대시보드 | InfluxDB Flux 5-panel | **Implemented** |
 
 - **Task name format:** `msjc-stage{1,2,3}-{timestamp}`
 - **Tracked artifacts:** model weights (`.pth`, `.pkl`), scaler, confusion matrix, per-class accuracy
