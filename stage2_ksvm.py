@@ -157,7 +157,49 @@ def generate_window_dataset(n_per_class: int = 500, window_size: int = WINDOW_SI
 # ─────────────────────────────────────────────
 # 3. 모델 학습 / 저장 / 로드
 # ─────────────────────────────────────────────
-def train_and_save(n_per_class: int = 500, window_size: int = WINDOW_SIZE):
+def generate_real_window_dataset(csv_path: str, window_size: int = WINDOW_SIZE):
+    """
+    실측 CSV에서 sliding window 데이터셋 생성.
+    각 모드의 연속 구간에서 window를 슬라이딩하여 12-dim feature 추출.
+
+    Returns: X (N × 12 float32), y (N, int32) — 0=Normal, 1=Attack
+    """
+    import csv as _csv
+    from kpi_feature_extractor import csv_row_to_features
+
+    with open(csv_path) as f:
+        rows = list(_csv.DictReader(f))
+
+    # 모드별 연속 구간 추출
+    from collections import defaultdict
+    mode_indices = defaultdict(list)
+    for i, r in enumerate(rows):
+        mode_indices[r['label']].append(i)
+
+    # 각 행을 8-dim feature로 변환
+    all_features = np.array([csv_row_to_features(r) for r in rows], dtype=np.float32)
+
+    X_list, y_list = [], []
+    W = window_size
+
+    for mode, indices in mode_indices.items():
+        if len(indices) < W:
+            continue
+        is_attack = 0 if mode == "Normal" else 1
+        n_windows = len(indices) - W + 1
+        for start in range(n_windows):
+            win_idx = indices[start:start + W]
+            win = all_features[win_idx]
+            X_list.append(extract_window_features(win))
+            y_list.append(is_attack)
+
+    print(f"[Stage2 KSVM] 실측 window 데이터: {len(X_list)}개 "
+          f"(Normal={sum(1 for y in y_list if y==0)}, Attack={sum(1 for y in y_list if y==1)})")
+    return np.array(X_list, dtype=np.float32), np.array(y_list, dtype=np.int32)
+
+
+def train_and_save(n_per_class: int = 500, window_size: int = WINDOW_SIZE,
+                   real_csv: str = None):
     # ClearML integration (graceful)
     clearml_task = None
     try:
@@ -174,13 +216,18 @@ def train_and_save(n_per_class: int = 500, window_size: int = WINDOW_SIZE):
             "kernel": "rbf",
             "C": 10.0,
             "gamma": "scale",
+            "real_csv": real_csv or "none",
         })
         print("[Stage2 KSVM] ClearML 실험 추적 활성화")
     except ImportError:
         print("[Stage2 KSVM] ClearML 미설치 — 실험 추적 비활성화")
 
-    print(f"[Stage2 KSVM] Sliding window 합성 데이터 생성 (클래스당 {n_per_class}개, W={window_size})...")
-    X, y = generate_window_dataset(n_per_class, window_size)
+    if real_csv and os.path.exists(real_csv):
+        print(f"[Stage2 KSVM] 실측 데이터로 학습: {real_csv} (W={window_size})")
+        X, y = generate_real_window_dataset(real_csv, window_size)
+    else:
+        print(f"[Stage2 KSVM] Sliding window 합성 데이터 생성 (클래스당 {n_per_class}개, W={window_size})...")
+        X, y = generate_window_dataset(n_per_class, window_size)
 
     print(f"[Stage2 KSVM] Feature shape: {X.shape}, 공격 유형 7가지 포함")
 
@@ -265,12 +312,15 @@ if __name__ == "__main__":
                         help=f"슬라이딩 윈도우 크기 (기본: {WINDOW_SIZE})")
     parser.add_argument("--test", action="store_true",
                         help="합성 테스트 데이터로 정확도 확인")
+    parser.add_argument("--real-csv", type=str, default=None,
+                        help="실측 CSV로 학습 (kpm_fdd_alldata.csv)")
     parser.add_argument("--test-real", type=str, default=None,
                         help="실측 CSV로 평가 (kpm_fdd_7modes.csv)")
     args = parser.parse_args()
 
     if args.retrain:
-        pipeline = train_and_save(args.n_per_class, args.window_size)
+        pipeline = train_and_save(args.n_per_class, args.window_size,
+                                  real_csv=args.real_csv)
     else:
         pipeline = load_model()
 

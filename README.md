@@ -1,6 +1,6 @@
-# MSJC — Multi-Stage Jamming Classification xApp for 5G O-RAN
+# MSJC — Multi-Stage Jamming Classification for 5G O-RAN
 
-> Hierarchical jamming detection and protocol-aware classification on a real 5G O-RAN testbed with closed-loop MLOps.
+> Multi-stage jamming detection and protocol-aware classification on a real 5G O-RAN testbed with closed-loop MLOps.
 
 [![srsRAN](https://img.shields.io/badge/srsRAN-Project-blue)](https://github.com/srsran/srsRAN_Project)
 [![FlexRIC](https://img.shields.io/badge/FlexRIC-Near--RT%20RIC-green)](https://gitlab.eurecom.fr/mosaic5g/flexric)
@@ -21,8 +21,8 @@ E2SM-KPM (1s) → [Stage 1: MLP 5-class] → Constant/Random/Reactive → ATTACK
 
 | Metric | Value |
 |--------|-------|
-| **Detection Rate** | 100% (all 7 modes, S1+S2 combined) |
-| **False Alarm** | 3.1% |
+| **Detection Rate** | 100% (all 7 modes, S1+S2 combined, real data hold-out) |
+| **False Alarm** | 1.3% (held-out real testbed data, N=325 windows) |
 | **Latency** | ≤ 73 ms (within Near-RT RIC 100 ms budget) |
 | **Protocol Classification** | PSS 86%, PDCCH 90%, DMRS 76%, Deceptive 100% |
 
@@ -166,6 +166,8 @@ bash tools/demo_closedloop.sh
 │   ├── collect_iq_all.sh       # Automated I/Q collection
 │   ├── demo_closedloop.sh      # Closed-loop E2E demo
 │   ├── generate_paper_figures.py # Paper figures (PDF)
+│   ├── eval_real_crossval.py    # Real data cross-validation
+│   ├── collect_extended.sh      # Extended KPM collection (10min/mode)
 │   └── ...
 │
 ├── config.template.yaml        # Config template (copy to config.yaml)
@@ -207,12 +209,12 @@ Model files (`.pth`, `.pkl`) are also gitignored. Retrain with commands above.
 
 | Mode | Stage 1 | Stage 2 | Combined |
 |------|---------|---------|----------|
-| Normal (FA) | 2.3% | 3.1% | **~3%** |
+| Normal (FA) | 1.3% | 0% | **1.3%** |
 | Constant | 100% | 100% | **100%** |
-| Random | 68% | 100% | **~100%** |
-| Reactive | 64% | 100% | **~100%** |
+| Random | 66.4% | 100% | **100%** |
+| Reactive | 63.0% | 100% | **100%** |
 | Deceptive | 0% | 100% | **100%** |
-| PSS | 1% | 100% | **100%** |
+| PSS | 0% | 100% | **100%** |
 | PDCCH | 0% | 100% | **100%** |
 | DMRS | 0% | 100% | **100%** |
 
@@ -229,6 +231,14 @@ Model files (`.pth`, `.pkl`) are also gitignored. Retrain with commands above.
 
 1. M. Hachimi et al., "Multi-stage Jamming Attacks Detection using Deep Learning Combined with Kernelized Support Vector Machine in 5G Cloud-RAN," *IEEE GLOBECOM*, 2020.
 2. M. Rahman et al., "SAJD: Self-Adaptive Jamming Attack Detection in AI/ML Integrated 5G O-RAN Networks," *arXiv:2511.17519*, 2025.
+
+## Paper
+
+**MSJC: Multi-Stage Jamming Classification for 5G O-RAN with Closed-Loop MLOps**
+Hyungmin Kim and Eric W. Burger, Virginia Tech.
+Target venue: IEEE MILCOM.
+
+Paper source in `paper/main.tex`.
 
 ## License
 

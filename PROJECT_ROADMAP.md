@@ -1,7 +1,7 @@
 # MSJC 프로젝트 전체 로드맵 (Phase 1~7)
 
-> 최종 업데이트: 2026-05-01
-> 프로젝트: Hierarchical Jamming Classification xApp on 5G O-RAN (석사 논문)
+> 최종 업데이트: 2026-05-08
+> 프로젝트: Multi-Stage Jamming Classification for 5G O-RAN (석사 논문)
 > 타깃: IEEE MILCOM
 
 ---
@@ -114,9 +114,9 @@
 | 7.3 | Rahman et al. 대비 차별점 | ✅ | Table IV 포함 |
 | 7.4 | 스펙트로그램 시각화 | ✅ | `fig_spectrograms.pdf` |
 | 7.5 | Latency CDF Figure | ✅ | `fig_latency_cdf.pdf` |
-| 7.6 | E2SM-RC 제어 시연 | 📋 선택 | stub 수준, contribution 강화 |
-| 7.7 | README + 재현성 패키지 | 📋 예정 | GitHub repo 정리 |
-| 7.8 | 논문 초안 (Overleaf) | 📋 예정 | IEEE MILCOM 6페이지 |
+| 7.6 | 실측 Cross-validation | ✅ | `tools/eval_real_crossval.py`, 100% detection, FA 1.3% |
+| 7.7 | 논문 초안 작성 | ✅ | `paper/main.tex` — IEEE MILCOM 형식, 공저자 추가 |
+| 7.8 | README + 재현성 패키지 | ✅ | GitHub repo 정리, 최신 결과 반영 |
 | 7.9 | 지도교수 리뷰 + 수정 | 📋 예정 | |
 | 7.10 | 최종 제출 | 📋 예정 | |
 
@@ -132,9 +132,9 @@
 | **Phase 4** | 실데이터 재학습 + E2E | 10/10 | ✅ |
 | **Phase 5** | 실측 I/Q + 데이터 보강 | 7/7 | ✅ |
 | **Phase 6** | Closed-Loop MLOps | 10/10 | ✅ |
-| **Phase 7** | 논문 작성 | 5/10 | 🔶 진행 중 |
+| **Phase 7** | 논문 작성 | 8/10 | 🔶 진행 중 |
 
-**전체: 60/65 태스크 완료 (92%)**
+**전체: 63/65 태스크 완료 (97%)**
 
 ---
 
@@ -142,8 +142,8 @@
 
 | 지표 | 값 |
 |------|-----|
-| S1+S2 탐지율 | 전 7모드 **100%** |
-| False Alarm | **3.1%** |
+| S1+S2 탐지율 | 전 7모드 **100%** (held-out real data) |
+| False Alarm | **1.3%** (cross-validation, N=325 windows) |
 | S3 분류 (실측 I/Q) | PSS 86%, PDCCH 90%, DMRS 76%, Deceptive 100% |
 | Latency | CLEAN 1-4ms, PROTOCOL_AWARE 40-73ms (**≤100ms**) |
 | 데이터 | KPM 1,733개 + I/Q 400개 |

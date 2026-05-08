@@ -1,5 +1,5 @@
 # MSJC Project - Common Configuration (TEMPLATE)
-# 5G O-RAN Hierarchical Jamming Classification (CCI xG Testbed)
+# MSJC: Multi-Stage Jamming Classification for 5G O-RAN (CCI xG Testbed)
 #
 # 사용법: cp config.template.yaml config.yaml
 #         config.yaml 에서 토큰 등 인스턴스별 값 입력

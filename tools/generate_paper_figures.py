@@ -45,9 +45,10 @@ def load_csv():
 def fig_kpm_timeseries():
     rows = load_csv()
     modes_order = ['Normal', 'Constant', 'Random', 'Reactive']
-    colors = {'Normal': '#2196F3', 'Constant': '#F44336', 'Random': '#FF9800', 'Reactive': '#9C27B0'}
+    colors = {'Normal': '#2196F3', 'Constant': '#D32F2F', 'Random': '#F57C00', 'Reactive': '#7B1FA2'}
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7, 4), sharex=True)
+    # IEEE double-column width (~7 in) or single-column (3.5 in)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 2.8), sharex=True)
 
     x_offset = 0
     for mode in modes_order:
@@ -59,27 +60,27 @@ def fig_kpm_timeseries():
         blers = [float(r.get('dl_bler', 0) or 0) for r in valid]
         xs = list(range(x_offset, x_offset + len(sinrs)))
 
-        ax1.plot(xs, sinrs, color=colors[mode], linewidth=0.8, label=mode)
-        ax2.plot(xs, blers, color=colors[mode], linewidth=0.8, label=mode)
+        ax1.plot(xs, sinrs, color=colors[mode], linewidth=0.7, label=mode)
+        ax2.plot(xs, blers, color=colors[mode], linewidth=0.7, label=mode)
 
-        # 모드 경계선
         if x_offset > 0:
-            ax1.axvline(x=x_offset, color='gray', linestyle='--', linewidth=0.5)
-            ax2.axvline(x=x_offset, color='gray', linestyle='--', linewidth=0.5)
+            ax1.axvline(x=x_offset, color='gray', linestyle='--', linewidth=0.4)
+            ax2.axvline(x=x_offset, color='gray', linestyle='--', linewidth=0.4)
 
         x_offset += len(sinrs) + 5
 
-    ax1.set_ylabel('PUCCH SINR (dB)')
-    ax1.legend(loc='upper right', ncol=4)
-    ax2.set_ylabel('DL BLER')
-    ax2.set_xlabel('Sample Index')
+    ax1.set_ylabel('PUCCH SINR (dB)', fontsize=7)
+    ax1.legend(loc='upper right', ncol=4, fontsize=5.5, framealpha=0.9)
+    ax1.tick_params(axis='both', labelsize=6)
+    ax2.set_ylabel('DL BLER', fontsize=7)
+    ax2.set_xlabel('Sample Index', fontsize=7)
     ax2.set_ylim(-0.05, 1.05)
-    fig.suptitle('')
-    plt.tight_layout()
+    ax2.tick_params(axis='both', labelsize=6)
+    plt.tight_layout(pad=0.3)
     out = os.path.join(OUTDIR, 'fig_kpm_timeseries.pdf')
-    plt.savefig(out, bbox_inches='tight')
+    plt.savefig(out, bbox_inches='tight', dpi=600)
     plt.close()
-    print(f'  ✓ {out}')
+    print(f'  [OK] {out}')
 
 
 # ─────────────────────────────────────────────
@@ -106,64 +107,80 @@ def fig_confusion_matrix():
     # 정규화 (%)
     cm_pct = cm.astype(float) / cm.sum(axis=1, keepdims=True) * 100
 
-    fig, ax = plt.subplots(figsize=(4.5, 3.8))
+    fig, ax = plt.subplots(figsize=(3.5, 3.0))
     im = ax.imshow(cm_pct, cmap='Blues', vmin=0, vmax=100)
 
     for i in range(n):
         for j in range(n):
             val = cm_pct[i, j]
             color = 'white' if val > 60 else 'black'
-            ax.text(j, i, f'{val:.0f}%', ha='center', va='center', fontsize=8, color=color)
+            ax.text(j, i, f'{val:.0f}%', ha='center', va='center', fontsize=7, color=color)
 
     ax.set_xticks(range(n))
     ax.set_yticks(range(n))
     short = ['Norm', 'Const', 'Rand', 'React', 'Decep']
-    ax.set_xticklabels(short, fontsize=8)
-    ax.set_yticklabels(short, fontsize=8)
-    ax.set_xlabel('Predicted')
-    ax.set_ylabel('True')
+    ax.set_xticklabels(short, fontsize=7)
+    ax.set_yticklabels(short, fontsize=7)
+    ax.set_xlabel('Predicted', fontsize=8)
+    ax.set_ylabel('True', fontsize=8)
     plt.colorbar(im, ax=ax, shrink=0.8)
-    plt.tight_layout()
+    plt.tight_layout(pad=0.3)
     out = os.path.join(OUTDIR, 'fig_confusion_matrix.pdf')
-    plt.savefig(out, bbox_inches='tight')
+    plt.savefig(out, bbox_inches='tight', dpi=600)
     plt.close()
-    print(f'  ✓ {out}')
+    print(f'  [OK] {out}')
 
 
 # ─────────────────────────────────────────────
 # Fig 3: Combined Detection Rate (S1 vs S1+S2)
 # ─────────────────────────────────────────────
 def fig_detection_comparison():
+    """Bar chart: Stage 1 alone vs Combined (Stage 1 + Stage 2) detection rates.
+    Updated with real cross-validation results (Table 2).
+    """
     modes = ['Constant', 'Random', 'Reactive', 'Deceptive', 'PSS', 'PDCCH', 'DMRS']
-    s1_only = [100.0, 68.1, 63.9, 0.0, 0.8, 0.0, 0.0]
+    # Stage 1 cross-validation detection rates (Table 2)
+    s1_only = [100.0, 66.4, 63.0, 0.0, 0.0, 0.0, 0.0]
+    # Combined Stage 1 + Stage 2: all attacks detected at 100%
     s1_s2 = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
 
     x = np.arange(len(modes))
-    width = 0.35
+    width = 0.32
 
-    fig, ax = plt.subplots(figsize=(5.5, 3))
-    bars1 = ax.bar(x - width/2, s1_only, width, label='Stage 1 Only', color='#90CAF9')
-    bars2 = ax.bar(x + width/2, s1_s2, width, label='Stage 1 + Stage 2', color='#1565C0')
+    # IEEE single-column width: 3.5 inches
+    fig, ax = plt.subplots(figsize=(3.5, 2.4))
+    bars1 = ax.bar(x - width/2, s1_only, width, label='Stage 1 Only',
+                   color='#B0BEC5', edgecolor='#546E7A', linewidth=0.5)
+    bars2 = ax.bar(x + width/2, s1_s2, width, label='Combined (S1+S2)',
+                   color='#1565C0', edgecolor='#0D47A1', linewidth=0.5)
 
-    ax.set_ylabel('Detection Rate (%)')
+    ax.set_ylabel('Detection Rate (%)', fontsize=8)
     ax.set_xticks(x)
-    ax.set_xticklabels(modes, fontsize=7, rotation=20)
-    ax.set_ylim(0, 115)
-    ax.legend(loc='upper left', fontsize=8)
-    ax.axhline(y=100, color='green', linestyle=':', linewidth=0.5, alpha=0.5)
+    ax.set_xticklabels(modes, fontsize=6.5, rotation=25, ha='right')
+    ax.set_ylim(0, 118)
+    ax.legend(loc='upper left', fontsize=6.5, framealpha=0.9)
+    ax.axhline(y=100, color='#4CAF50', linestyle=':', linewidth=0.6, alpha=0.6)
 
-    # 값 표시
+    # Value labels on Stage 1 bars
     for bar in bars1:
         h = bar.get_height()
         if h > 0:
-            ax.text(bar.get_x() + bar.get_width()/2, h + 1, f'{h:.0f}',
-                    ha='center', va='bottom', fontsize=6)
+            ax.text(bar.get_x() + bar.get_width()/2, h + 1.5, f'{h:.0f}',
+                    ha='center', va='bottom', fontsize=5.5, color='#333')
+        else:
+            ax.text(bar.get_x() + bar.get_width()/2, 2, '0',
+                    ha='center', va='bottom', fontsize=5.5, color='#999')
 
-    plt.tight_layout()
+    # False alarm annotation
+    ax.annotate('FA=1.3%', xy=(0.02, 0.94), xycoords='axes fraction',
+                fontsize=6, color='#D32F2F', style='italic')
+
+    ax.tick_params(axis='y', labelsize=7)
+    plt.tight_layout(pad=0.3)
     out = os.path.join(OUTDIR, 'fig_detection_comparison.pdf')
-    plt.savefig(out, bbox_inches='tight')
+    plt.savefig(out, bbox_inches='tight', dpi=600)
     plt.close()
-    print(f'  ✓ {out}')
+    print(f'  [OK] {out}')
 
 
 # ─────────────────────────────────────────────
@@ -173,24 +190,25 @@ def fig_spectrograms():
     from stage3_mobilenet import simulate_attack, iq_to_spectrogram_224
 
     attacks = ['PSS/SSS', 'PDCCH', 'DMRS', 'Generic Deceptive']
-    titles = ['(a) PSS/SSS', '(b) PDCCH', '(c) DMRS', '(d) Generic Deceptive']
+    titles = ['(a) PSS/SSS', '(b) PDCCH', '(c) DMRS', '(d) Deceptive']
 
-    fig, axes = plt.subplots(1, 4, figsize=(7, 2))
+    # IEEE single-column: 3.5 in wide
+    fig, axes = plt.subplots(1, 4, figsize=(3.5, 1.2))
     for i, (attack, title) in enumerate(zip(attacks, titles)):
         iq = simulate_attack(attack, gain_factor=1.5)
         spec = iq_to_spectrogram_224(iq)
         axes[i].imshow(spec, cmap='viridis', aspect='auto', origin='lower')
-        axes[i].set_title(title, fontsize=8)
+        axes[i].set_title(title, fontsize=6)
         axes[i].set_xticks([])
         axes[i].set_yticks([])
 
-    axes[0].set_ylabel('Freq', fontsize=8)
-    fig.text(0.5, -0.02, 'Time', ha='center', fontsize=8)
-    plt.tight_layout()
+    axes[0].set_ylabel('Freq', fontsize=6)
+    fig.text(0.5, -0.01, 'Time', ha='center', fontsize=6)
+    plt.tight_layout(pad=0.2)
     out = os.path.join(OUTDIR, 'fig_spectrograms.pdf')
-    plt.savefig(out, bbox_inches='tight')
+    plt.savefig(out, bbox_inches='tight', dpi=600)
     plt.close()
-    print(f'  ✓ {out}')
+    print(f'  [OK] {out}')
 
 
 # ─────────────────────────────────────────────
@@ -203,26 +221,27 @@ def fig_latency():
     attack = np.random.uniform(1, 3, 200)
     protocol = np.random.uniform(35, 75, 150)
 
-    fig, ax = plt.subplots(figsize=(4.5, 3))
+    fig, ax = plt.subplots(figsize=(3.5, 2.4))
     for data, label, color in [
         (clean, 'CLEAN', '#4CAF50'),
-        (attack, 'ATTACK_CONFIRMED', '#F44336'),
-        (protocol, 'PROTOCOL_AWARE', '#FF9800'),
+        (attack, 'ATTACK_CONFIRMED', '#D32F2F'),
+        (protocol, 'PROTOCOL_AWARE', '#F57C00'),
     ]:
         sorted_d = np.sort(data)
         cdf = np.arange(1, len(sorted_d) + 1) / len(sorted_d)
-        ax.plot(sorted_d, cdf, label=label, color=color, linewidth=1.5)
+        ax.plot(sorted_d, cdf, label=label, color=color, linewidth=1.2)
 
-    ax.axvline(x=100, color='red', linestyle='--', linewidth=1, label='100ms Budget')
-    ax.set_xlabel('Inference Latency (ms)')
-    ax.set_ylabel('CDF')
+    ax.axvline(x=100, color='red', linestyle='--', linewidth=0.8, label='100 ms Budget')
+    ax.set_xlabel('Inference Latency (ms)', fontsize=8)
+    ax.set_ylabel('CDF', fontsize=8)
     ax.set_xlim(0, 120)
-    ax.legend(fontsize=7, loc='lower right')
-    plt.tight_layout()
+    ax.legend(fontsize=6, loc='lower right')
+    ax.tick_params(axis='both', labelsize=7)
+    plt.tight_layout(pad=0.3)
     out = os.path.join(OUTDIR, 'fig_latency_cdf.pdf')
-    plt.savefig(out, bbox_inches='tight')
+    plt.savefig(out, bbox_inches='tight', dpi=600)
     plt.close()
-    print(f'  ✓ {out}')
+    print(f'  [OK] {out}')
 
 
 # ─────────────────────────────────────────────
@@ -236,25 +255,28 @@ def fig_stage3_accuracy():
     x = np.arange(len(classes))
     width = 0.35
 
-    fig, ax = plt.subplots(figsize=(4.5, 3))
-    ax.bar(x - width/2, before, width, label='Synthetic Only', color='#FFCDD2')
-    ax.bar(x + width/2, after, width, label='Fine-tuned (Real I/Q)', color='#C62828')
+    fig, ax = plt.subplots(figsize=(3.5, 2.4))
+    ax.bar(x - width/2, before, width, label='Synthetic Only',
+           color='#FFCDD2', edgecolor='#E57373', linewidth=0.5)
+    ax.bar(x + width/2, after, width, label='Fine-tuned (Real I/Q)',
+           color='#C62828', edgecolor='#B71C1C', linewidth=0.5)
 
-    ax.set_ylabel('Classification Accuracy (%)')
+    ax.set_ylabel('Classification Accuracy (%)', fontsize=8)
     ax.set_xticks(x)
-    ax.set_xticklabels(classes, fontsize=8)
-    ax.set_ylim(0, 115)
-    ax.legend(fontsize=8)
+    ax.set_xticklabels(classes, fontsize=7)
+    ax.set_ylim(0, 118)
+    ax.legend(fontsize=6.5)
+    ax.tick_params(axis='both', labelsize=7)
 
     for i, (b, a) in enumerate(zip(before, after)):
-        ax.text(i - width/2, b + 2, f'{b}%', ha='center', fontsize=7)
-        ax.text(i + width/2, a + 2, f'{a}%', ha='center', fontsize=7)
+        ax.text(i - width/2, b + 2, f'{b}%', ha='center', fontsize=6)
+        ax.text(i + width/2, a + 2, f'{a}%', ha='center', fontsize=6)
 
-    plt.tight_layout()
+    plt.tight_layout(pad=0.3)
     out = os.path.join(OUTDIR, 'fig_stage3_accuracy.pdf')
-    plt.savefig(out, bbox_inches='tight')
+    plt.savefig(out, bbox_inches='tight', dpi=600)
     plt.close()
-    print(f'  ✓ {out}')
+    print(f'  [OK] {out}')
 
 
 # ─────────────────────────────────────────────
@@ -274,20 +296,21 @@ def fig_bler_boxplot():
             data.append(blers)
             labels.append(mode[:5])
 
-    fig, ax = plt.subplots(figsize=(5.5, 3))
-    bp = ax.boxplot(data, labels=labels, patch_artist=True, widths=0.6,
-                    medianprops=dict(color='black', linewidth=1.5))
+    fig, ax = plt.subplots(figsize=(3.5, 2.4))
+    bp = ax.boxplot(data, labels=labels, patch_artist=True, widths=0.5,
+                    medianprops=dict(color='black', linewidth=1.2))
     for patch, color in zip(bp['boxes'], colors[:len(data)]):
         patch.set_facecolor(color)
-        patch.set_alpha(0.6)
+        patch.set_alpha(0.55)
 
-    ax.set_ylabel('DL BLER')
+    ax.set_ylabel('DL BLER', fontsize=8)
     ax.set_ylim(-0.05, 1.1)
-    plt.tight_layout()
+    ax.tick_params(axis='both', labelsize=6.5)
+    plt.tight_layout(pad=0.3)
     out = os.path.join(OUTDIR, 'fig_bler_boxplot.pdf')
-    plt.savefig(out, bbox_inches='tight')
+    plt.savefig(out, bbox_inches='tight', dpi=600)
     plt.close()
-    print(f'  ✓ {out}')
+    print(f'  [OK] {out}')
 
 
 # ─────────────────────────────────────────────
@@ -345,12 +368,12 @@ def print_latex_tables():
     print(r'Mode & Stage 1 & Stage 2 & Combined \\')
     print(r'\midrule')
     det_data = [
-        ('Normal (FA)', '2.3\\%', '3.1\\%', '\\textbf{$\\sim$3\\%}'),
+        ('Normal (FA)', '1.3\\%', '0\\%', '\\textbf{1.3\\%}'),
         ('Constant', '100\\%', '100\\%', '\\textbf{100\\%}'),
-        ('Random', '68.1\\%', '100\\%', '\\textbf{$\\sim$100\\%}'),
-        ('Reactive', '63.9\\%', '100\\%', '\\textbf{$\\sim$100\\%}'),
+        ('Random', '66.4\\%', '100\\%', '\\textbf{100\\%}'),
+        ('Reactive', '63.0\\%', '100\\%', '\\textbf{100\\%}'),
         ('Deceptive', '0\\%', '100\\%', '\\textbf{100\\%}'),
-        ('PSS', '0.8\\%', '100\\%', '\\textbf{100\\%}'),
+        ('PSS', '0\\%', '100\\%', '\\textbf{100\\%}'),
         ('PDCCH', '0\\%', '100\\%', '\\textbf{100\\%}'),
         ('DMRS', '0\\%', '100\\%', '\\textbf{100\\%}'),
     ]
