@@ -229,8 +229,46 @@ Model files (`.pth`, `.pkl`) are also gitignored. Retrain with commands above.
 
 ## References
 
-1. M. Hachimi et al., "Multi-stage Jamming Attacks Detection using Deep Learning Combined with Kernelized Support Vector Machine in 5G Cloud-RAN," *IEEE GLOBECOM*, 2020.
-2. M. Rahman et al., "SAJD: Self-Adaptive Jamming Attack Detection in AI/ML Integrated 5G O-RAN Networks," *arXiv:2511.17519*, 2025.
+### Core — MSJC Pipeline Basis
+1. M. Hachimi, G. Kaddoum, and G. Gagnon, "Multi-stage Jamming Attacks Detection using Deep Learning Combined with Kernelized Support Vector Machine in 5G Cloud-RAN," *IEEE GLOBECOM*, 2020. doi:[10.1109/GLOBECOM42002.2020.9348244](https://doi.org/10.1109/GLOBECOM42002.2020.9348244)
+2. M. A. Rahman, M. A. K. Azad, A. Beheshti, *et al.*, "SAJD: Self-Adaptive Jamming Attack Detection in AI/ML Integrated 5G O-RAN Networks," *arXiv:2511.17519*, 2025.
+
+### Jamming Surveys & Classification
+3. H. Pirayesh and H. Zeng, "Jamming Attacks and Anti-Jamming Strategies in Wireless Networks: A Comprehensive Survey," *IEEE Commun. Surveys Tuts.*, vol. 24, no. 2, pp. 767–809, 2022. doi:[10.1109/COMST.2022.3159185](https://doi.org/10.1109/COMST.2022.3159185)
+4. S. Savadatti, S. K. Dhariwal, S. Krishnamoorthy, and R. Delhibabu, "An Extensive Classification of 5G Network Jamming Attacks," *Security and Communication Networks*, vol. 2024, 2024. doi:[10.1155/2024/2883082](https://doi.org/10.1155/2024/2883082)
+5. M. Harvanek, J. Bolcek, J. Kufa, L. Polak, M. Simka, and R. Marsalek, "Survey on 5G Physical Layer Security Threats and Countermeasures," *Sensors*, vol. 24, no. 17, p. 5523, 2024. doi:[10.3390/s24175523](https://doi.org/10.3390/s24175523)
+6. M. F. Shahid, K. Mehmood, M. Mohsin, A. Saleem, S. Yaqoob, and W. Bashir, "Taxonomy of Physical Layer Jamming Techniques and Strategies for Security Enhancement in Wireless Communication: A Comprehensive Survey," *TechRxiv*, 2024. doi:[10.36227/techrxiv.172425846.66605015/v1](https://doi.org/10.36227/techrxiv.172425846.66605015/v1)
+
+### ML-based Jamming Detection
+7. S. Jere, Y. Wang, I. Aryendu, S. Dayekh, and L. Liu, "Bayesian Inference-Assisted Machine Learning for Near Real-Time Jamming Detection and Classification in 5G NR," *IEEE Trans. Wireless Commun.*, vol. 23, no. 7, pp. 7043–7058, 2024. doi:[10.1109/TWC.2023.3337058](https://doi.org/10.1109/TWC.2023.3337058)
+
+### O-RAN Architecture
+8. M. Polese, L. Bonati, S. D'Oro, S. Basagni, and T. Melodia, "Understanding O-RAN: Architecture, Interfaces, Algorithms, Security, and Research Challenges," *IEEE Commun. Surveys Tuts.*, vol. 25, no. 2, pp. 1376–1411, 2023. doi:[10.1109/COMST.2023.3239220](https://doi.org/10.1109/COMST.2023.3239220)
+9. A. S. Abdalla, P. S. Upadhyaya, V. K. Shah, and V. Marojevic, "Toward Next Generation Open Radio Access Networks: What O-RAN Can and Cannot Do!," *IEEE Network*, vol. 36, no. 6, pp. 206–213, 2022. doi:[10.1109/MNET.108.2100659](https://doi.org/10.1109/MNET.108.2100659)
+10. S. Marinova and A. Leon-Garcia, "Intelligent O-RAN Beyond 5G: Architecture, Use Cases, Challenges, and Opportunities," *IEEE Access*, vol. 12, pp. 27088–27121, 2024. doi:[10.1109/ACCESS.2024.3367289](https://doi.org/10.1109/ACCESS.2024.3367289)
+
+### O-RAN xApp Design & Testbeds
+11. J. F. Santos, A. Huff, D. Campos, K. V. Cardoso, C. B. Both, and L. A. DaSilva, "Managing O-RAN Networks: xApp Development from Zero to Hero," *IEEE Commun. Surveys Tuts.*, 2025. doi:[10.1109/COMST.2025.3539687](https://doi.org/10.1109/COMST.2025.3539687)
+12. M. Hoffmann, S. Janji, A. Samorzewski, *et al.*, "Open RAN xApps Design and Evaluation: Lessons Learnt and Identified Challenges," *IEEE J. Sel. Areas Commun.*, vol. 42, no. 2, pp. 473–491, 2024. doi:[10.1109/JSAC.2023.3336190](https://doi.org/10.1109/JSAC.2023.3336190)
+13. A. da Silva, M. Roy Chowdhury, A. Sathish, A. Tripathi, S. F. Midkiff, and L. A. da Silva, "CCI xG Testbed: An O-RAN Based Platform for Future Wireless Network Experimentation," *IEEE Commun. Mag.*, vol. 63, no. 2, pp. 62–68, 2025. doi:[10.1109/MCOM.001.2400322](https://doi.org/10.1109/MCOM.001.2400322)
+14. N. H. Stephenson, A. J. Chiejina, N. B. Kabigting, and V. K. Shah, "Demonstration of Closed Loop AI-Driven RAN Controllers Using O-RAN SDR Testbed," *IEEE MILCOM*, 2023. doi:[10.1109/MILCOM58377.2023.10356330](https://doi.org/10.1109/MILCOM58377.2023.10356330)
+
+### O-RAN Jamming / Anomaly Detection xApps
+15. P. Kryszkiewicz and M. Hoffmann, "Open RAN for Detection of a Jamming Attack in a 5G Network," *IEEE VTC2023-Spring*, 2023. doi:[10.1109/VTC2023-Spring57618.2023.10201067](https://doi.org/10.1109/VTC2023-Spring57618.2023.10201067)
+16. J. Moore, A. S. Abdalla, C. Ueltschey, and V. Marojevic, "Demonstrating Jamming Mitigation in O-RAN via AI enabled Intrusion Detection and Secure Slicing xApps," *IEEE MILCOM*, 2025. doi:[10.1109/MILCOM64451.2025.11310542](https://doi.org/10.1109/MILCOM64451.2025.11310542)
+17. H. Bogucka, M. Hoffmann, P. Kryszkiewicz, and Ł. Kułacz, "An Open-RAN Testbed for Detecting and Mitigating Radio-Access Anomalies," *IEEE Commun. Mag.*, 2025. doi:[10.1109/MCOM.003.2400513](https://doi.org/10.1109/MCOM.003.2400513)
+18. S. Dimou and G. Noubir, "ARGOS: Anomaly Recognition and Guarding through O-RAN Sensing," *arXiv:2506.06916*, 2025.
+19. A. Paz-Pérez, J. Suárez Gómez, F. J. Valera Sánchez, and J. J. Escudero-Garzás, "Design and Implementation of an xApp-based System for Jamming and Interference Mitigation," *IEEE ISNCC*, 2025. doi:[10.1109/ISNCC66965.2025.11250457](https://doi.org/10.1109/ISNCC66965.2025.11250457)
+
+### Spectrogram / I/Q ML
+20. G. Reus-Muns, P. S. Upadhyaya, U. Demir, N. Stephenson, N. Soltani, V. K. Shah, and K. R. Chowdhury, "SenseORAN: O-RAN-Based Radar Detection in the CBRS Band," *IEEE J. Sel. Areas Commun.*, vol. 42, no. 2, pp. 326–340, 2024. doi:[10.1109/JSAC.2023.3336152](https://doi.org/10.1109/JSAC.2023.3336152)
+
+### ML Models
+21. A. Howard, M. Sandler, G. Chu, *et al.*, "Searching for MobileNetV3," *IEEE/CVF ICCV*, pp. 1314–1324, 2019. doi:[10.1109/ICCV.2019.00140](https://doi.org/10.1109/ICCV.2019.00140)
+
+### O-RAN Security
+22. P. K. Kakani, M. A. Habibi, M. R. Chavva Balannagari, X. Costa-Pérez, and H. D. Schotten, "Mitigating ML-Driven Adversarial Attacks on xApps Using Dynamic Defense Mechanisms," *IEEE Open J. Commun. Soc.*, vol. 6, pp. 6912–6930, 2025. doi:[10.1109/OJCOMS.2025.3602200](https://doi.org/10.1109/OJCOMS.2025.3602200)
+23. Y. Rumesh, D. Attanayaka, P. Porambage, J. Pinola, J. Groen, and K. Chowdhury, "Federated Learning for Anomaly Detection in Open RAN: Security Architecture Within a Digital Twin," *EuCNC & 6G Summit*, 2024.
 
 ## Paper
 
