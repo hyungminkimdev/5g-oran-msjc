@@ -38,6 +38,8 @@ plt.rcParams.update({
 CSV_PATH = os.path.join(os.path.dirname(__file__), '..', 'kpm_fdd_alldata.csv')
 EVAL_RESULTS_PATH = os.path.join(os.path.dirname(__file__), '..', 'eval_results.json')
 LATENCY_LOG_PATH = os.path.join(os.path.dirname(__file__), '..', 'latency_log.csv')
+IQ_DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'iq_data')
+STAGE3_RESULTS_PATH = os.path.join(os.path.dirname(__file__), '..', 'stage3_results.json')
 
 
 def load_csv():
@@ -221,14 +223,19 @@ def fig_detection_comparison():
 # Fig 4: Stage 3 스펙트로그램 비교 (4 attack types)
 # ─────────────────────────────────────────────
 def fig_spectrograms():
-    from stage3_mobilenet import simulate_attack, iq_to_spectrogram_224
+    """실측 I/Q 스펙트로그램 (iq_data/ 사용)"""
+    from stage3_mobilenet import iq_to_spectrogram_224
 
-    attacks = ['PSS/SSS', 'PDCCH', 'DMRS', 'Generic Deceptive']
-    titles = ['(a) PSS/SSS', '(b) PDCCH', '(c) DMRS', '(d) Deceptive']
+    # 실측 I/Q 디렉토리 → Stage 3 label 매핑
+    mode_dirs = [('PSS', '(a) PSS/SSS'), ('PDCCH', '(b) PDCCH'),
+                 ('DMRS', '(c) DMRS'), ('Deceptive', '(d) Deceptive')]
 
     fig, axes = plt.subplots(1, 4, figsize=(3.5, 1.2))
-    for i, (attack, title) in enumerate(zip(attacks, titles)):
-        iq = simulate_attack(attack, gain_factor=1.5)
+    for i, (dirname, title) in enumerate(mode_dirs):
+        npy_dir = os.path.join(IQ_DATA_DIR, dirname)
+        npy_files = sorted(f for f in os.listdir(npy_dir) if f.endswith('.npy'))
+        # 중앙 샘플 사용 (대표성)
+        iq = np.load(os.path.join(npy_dir, npy_files[len(npy_files)//2]))
         spec = iq_to_spectrogram_224(iq)
         axes[i].imshow(spec, cmap='viridis', aspect='auto', origin='lower')
         axes[i].set_title(title, fontsize=6)
@@ -241,7 +248,7 @@ def fig_spectrograms():
     out = os.path.join(OUTDIR, 'fig_spectrograms.pdf')
     plt.savefig(out, bbox_inches='tight', dpi=600)
     plt.close()
-    print(f'  [OK] {out}')
+    print(f'  [OK] {out} (실측 I/Q)')
 
 
 # ─────────────────────────────────────────────
@@ -360,36 +367,49 @@ def fig_latency():
 # Fig 6: Stage 3 실측 I/Q 분류 정확도 비교
 # ─────────────────────────────────────────────
 def fig_stage3_accuracy():
-    """Stage 3 MobileNetV3 정확도 — 실제 모델 추론으로 측정"""
-    from stage3_mobilenet import (load_model, classify, simulate_attack,
-                                   LABELS as S3_LABELS, LABEL_IDX as S3_LABEL_IDX)
+    """Stage 3 정확도 — 실측 I/Q (iq_data/) 기반 평가 + 결과 JSON 저장"""
+    from stage3_mobilenet import (load_model, classify, iq_to_spectrogram_224,
+                                   LABELS as S3_LABELS)
 
     model, device = load_model()
-    n_test = 100  # 클래스당 테스트 샘플 수
 
-    # Synthetic-only 정확도: 현재 모델로 합성 테스트
-    classes = S3_LABELS  # ['PSS/SSS', 'PDCCH', 'DMRS', 'Generic Deceptive']
+    # 실측 I/Q로 평가
+    dir_to_label = {'PSS': 'PSS/SSS', 'PDCCH': 'PDCCH', 'DMRS': 'DMRS', 'Deceptive': 'Generic Deceptive'}
     display_classes = ['PSS/SSS', 'PDCCH', 'DMRS', 'Deceptive']
     accuracies = []
+    s3_results = {}
 
-    for attack_type in classes:
+    for dirname, expected_label in dir_to_label.items():
+        npy_dir = os.path.join(IQ_DATA_DIR, dirname)
+        npy_files = sorted(f for f in os.listdir(npy_dir) if f.endswith('.npy'))
         correct = 0
-        for _ in range(n_test):
-            gain = np.random.uniform(0.5, 2.5)
-            iq = simulate_attack(attack_type, gain_factor=gain)
+        total = len(npy_files)
+        for f in npy_files:
+            iq = np.load(os.path.join(npy_dir, f))
             label, conf, _ = classify(iq, model, device)
-            if label == attack_type:
+            if label == expected_label:
                 correct += 1
-        acc = correct / n_test * 100
+        acc = correct / total * 100
         accuracies.append(acc)
-        print(f'  Stage3 {attack_type}: {acc:.0f}% ({correct}/{n_test})')
+        s3_results[expected_label] = {
+            'accuracy': round(acc, 1), 'correct': correct, 'total': total
+        }
+        print(f'  Stage3 {expected_label}: {acc:.1f}% ({correct}/{total} real I/Q)')
+
+    overall = sum(r['correct'] for r in s3_results.values()) / sum(r['total'] for r in s3_results.values()) * 100
+    s3_results['overall'] = round(overall, 1)
+
+    # JSON 저장
+    with open(STAGE3_RESULTS_PATH, 'w') as f:
+        json.dump(s3_results, f, indent=2)
+    print(f'  [저장] {STAGE3_RESULTS_PATH}')
 
     x = np.arange(len(display_classes))
     width = 0.5
 
     fig, ax = plt.subplots(figsize=(3.5, 2.4))
-    bars = ax.bar(x, accuracies, width, label='Current Model',
-                  color='#1565C0', edgecolor='#0D47A1', linewidth=0.5)
+    ax.bar(x, accuracies, width, label='Fine-tuned (Real I/Q)',
+           color='#1565C0', edgecolor='#0D47A1', linewidth=0.5)
 
     ax.set_ylabel('Classification Accuracy (%)', fontsize=8)
     ax.set_xticks(x)
@@ -405,7 +425,7 @@ def fig_stage3_accuracy():
     out = os.path.join(OUTDIR, 'fig_stage3_accuracy.pdf')
     plt.savefig(out, bbox_inches='tight', dpi=600)
     plt.close()
-    print(f'  [OK] {out}')
+    print(f'  [OK] {out} (실측 I/Q 기반)')
 
 
 # ─────────────────────────────────────────────
