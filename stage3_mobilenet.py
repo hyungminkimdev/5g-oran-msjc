@@ -272,6 +272,122 @@ def classify(iq: np.ndarray, model, device) -> tuple:
 
 
 # ─────────────────────────────────────────────
+# 7. 실측 I/Q Fine-Tuning
+# ─────────────────────────────────────────────
+IQ_DATA_DIR = os.path.join(os.path.dirname(__file__), "iq_data")
+
+# 디렉토리명 → Stage 3 라벨 인덱스
+_DIR_TO_LABEL = {
+    "PSS": 0, "pss": 0,
+    "PDCCH": 1, "pdcch": 1,
+    "DMRS": 2, "dmrs": 2,
+    "Deceptive": 3, "deceptive": 3,
+}
+
+
+def load_real_iq_dataset(iq_dir: str = IQ_DATA_DIR):
+    """실측 I/Q .npy → 스펙트로그램 데이터셋 (Stage 3 4-class만)"""
+    X_list, y_list = [], []
+    for dirname, label_idx in _DIR_TO_LABEL.items():
+        dirpath = os.path.join(iq_dir, dirname)
+        if not os.path.isdir(dirpath):
+            continue
+        npy_files = sorted(f for f in os.listdir(dirpath) if f.endswith('.npy'))
+        for f in npy_files:
+            iq = np.load(os.path.join(dirpath, f))
+            if len(iq) < 256:
+                continue
+            spec = iq_to_spectrogram_224(iq)
+            X_list.append(spec)
+            y_list.append(label_idx)
+        if npy_files:
+            print(f"  {dirname}: {len(npy_files)}개 로드")
+    return np.array(X_list, dtype=np.float32), np.array(y_list, dtype=np.int64)
+
+
+def fine_tune(iq_dir: str = IQ_DATA_DIR, epochs: int = 15, lr: float = 0.0001):
+    """합성 pretrained → 실측 I/Q fine-tune"""
+    model, device = load_model()
+
+    print(f"[Stage3] 실측 I/Q 로드: {iq_dir}")
+    X_real, y_real = load_real_iq_dataset(iq_dir)
+    if len(X_real) == 0:
+        print("[Stage3] 실측 데이터 없음!")
+        return model, device
+
+    # 합성 데이터도 섞어서 catastrophic forgetting 방지
+    print(f"[Stage3] 합성 보강 데이터 생성 (클래스당 50개)...")
+    X_syn, y_syn = generate_dataset(50)
+    X_all = np.concatenate([X_real, X_syn])
+    y_all = np.concatenate([y_real, y_syn])
+
+    # 80/20 split
+    n = len(X_all)
+    idx = np.random.RandomState(42).permutation(n)
+    split = int(n * 0.8)
+
+    X_tr = torch.from_numpy(X_all[idx[:split]]).unsqueeze(1).expand(-1, 3, -1, -1).contiguous()
+    y_tr = torch.from_numpy(y_all[idx[:split]])
+    X_va = torch.from_numpy(X_all[idx[split:]]).unsqueeze(1).expand(-1, 3, -1, -1).contiguous()
+    y_va = torch.from_numpy(y_all[idx[split:]])
+
+    loader = DataLoader(TensorDataset(X_tr, y_tr), batch_size=8, shuffle=True)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.CrossEntropyLoss()
+
+    print(f"[Stage3] Fine-tune 시작: {len(X_real)} real + {len(X_syn)} synth = {n}개, "
+          f"train={split}, val={n-split}")
+
+    best_val_acc = 0.0
+    model.train()
+    for epoch in range(epochs):
+        total_loss, correct, total = 0.0, 0, 0
+        for bx, by in loader:
+            bx, by = bx.to(device), by.to(device)
+            optimizer.zero_grad()
+            out = model(bx)
+            loss = criterion(out, by)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+            correct += (out.argmax(1) == by).sum().item()
+            total += by.size(0)
+
+        model.eval()
+        with torch.no_grad():
+            val_out = model(X_va.to(device))
+            val_acc = (val_out.argmax(1).cpu() == y_va).float().mean().item()
+        model.train()
+
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            torch.save(model.state_dict(), MODEL_PATH)
+
+        if (epoch + 1) % 5 == 0 or epoch == 0:
+            print(f"  Epoch {epoch+1:3d}/{epochs} | "
+                  f"Loss={total_loss/len(loader):.4f} | "
+                  f"Train={correct/total:.4f} | Val={val_acc:.4f}")
+
+    # Best 모델 로드 후 per-class 결과
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+    model.eval()
+    with torch.no_grad():
+        val_pred = model(X_va.to(device)).argmax(1).cpu().numpy()
+
+    print(f"\n[Stage3] Fine-tune 결과 (best val={best_val_acc:.4f}):")
+    for i, label in enumerate(LABELS):
+        mask = y_va.numpy() == i
+        if mask.sum() > 0:
+            acc = (val_pred[mask] == i).mean()
+            print(f"  {label:<20s}: {acc:.4f} ({mask.sum()}개)")
+
+    overall = (val_pred == y_va.numpy()).mean()
+    print(f"  전체: {overall:.4f}")
+    print(f"[Stage3] 저장: {MODEL_PATH}")
+    return model, device
+
+
+# ─────────────────────────────────────────────
 # Entry Point
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
@@ -279,13 +395,20 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         description="MSJC Stage 3 — MobileNetV3 Protocol-Aware 재밍 정밀 분류")
-    parser.add_argument("--retrain", action="store_true")
+    parser.add_argument("--retrain", action="store_true",
+                        help="합성 데이터로 처음부터 학습")
+    parser.add_argument("--fine-tune", action="store_true",
+                        help="실측 I/Q로 fine-tune")
+    parser.add_argument("--iq-dir", type=str, default=IQ_DATA_DIR,
+                        help="실측 I/Q .npy 디렉토리")
     parser.add_argument("--n-per-class", type=int, default=300)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--test", action="store_true")
     args = parser.parse_args()
 
-    if args.retrain:
+    if args.fine_tune:
+        model, device = fine_tune(args.iq_dir, args.epochs, lr=0.0001)
+    elif args.retrain:
         model, device = train_and_save(args.n_per_class, args.epochs)
     else:
         model, device = load_model()
