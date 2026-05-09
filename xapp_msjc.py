@@ -322,6 +322,10 @@ class MSJCxApp:
         self._ric = None
         self._iq_snap = None
 
+        # Latency CSV 로거
+        self._latency_log_path = os.path.join(os.path.dirname(__file__), "latency_log.csv")
+        self._latency_log_file = None
+
     # ── 모델 로드 ──────────────────────────────
     def _load_models(self):
         from stage1_mlp import load_model as load_s1
@@ -488,6 +492,25 @@ class MSJCxApp:
         from influx_logger import InfluxLogger
         self._influx_logger = InfluxLogger(influx_cfg)
 
+    # ── Latency CSV 로거 초기화 ────────────────
+    def _init_latency_log(self):
+        import csv as _csv
+        write_header = not os.path.exists(self._latency_log_path)
+        self._latency_log_file = open(self._latency_log_path, "a", newline="")
+        self._latency_csv = _csv.writer(self._latency_log_file)
+        if write_header:
+            self._latency_csv.writerow(["timestamp", "verdict", "s1_label", "latency_ms"])
+
+    def _log_latency(self, verdict: dict):
+        if self._latency_log_file:
+            self._latency_csv.writerow([
+                datetime.now().isoformat(),
+                verdict["final_verdict"],
+                verdict.get("s1_label", ""),
+                f'{verdict["latency_ms"]:.3f}',
+            ])
+            self._latency_log_file.flush()
+
     # ── E2SM-KPM Indication 콜백 ───────────────
     def _on_kpm_indication(self, hdr: dict, msg: dict):
         t0 = time.perf_counter()
@@ -524,6 +547,9 @@ class MSJCxApp:
         lat      = verdict["latency_ms"]
         print(f"[{_ts()}] SINR:{sinr:+.1f}dB BLER:{bler:.3f} | "
               f"S1:{s1_label}({s1_conf:.2f}) | {fv} | {lat:.1f}ms")
+
+        # Latency CSV 로깅
+        self._log_latency(verdict)
 
         # InfluxDB 로깅
         if self._influx_logger:
@@ -741,6 +767,7 @@ class MSJCxApp:
         self._load_models()
         self._init_influx()
         self._init_iq_snapshot()
+        self._init_latency_log()
 
         # 핫 리로드 백그라운드 스레드
         reload_thread = threading.Thread(

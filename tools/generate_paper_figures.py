@@ -1,19 +1,24 @@
 """
 MSJC 논문 Figure/Table 생성 — IEEE MILCOM
 모든 Figure를 PDF로 저장 (벡터, 인쇄 품질)
+
+사용법:
+  1. eval_real_crossval.py 실행 → eval_results.json 생성
+  2. (선택) xapp_msjc.py MockFlexRIC 모드 실행 → latency_log.csv 생성
+  3. python3 tools/generate_paper_figures.py
 """
 
 import numpy as np
 import csv
+import json
 import os
 import sys
 import torch
-from collections import Counter, defaultdict
+from collections import defaultdict
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -31,11 +36,33 @@ plt.rcParams.update({
 })
 
 CSV_PATH = os.path.join(os.path.dirname(__file__), '..', 'kpm_fdd_alldata.csv')
+EVAL_RESULTS_PATH = os.path.join(os.path.dirname(__file__), '..', 'eval_results.json')
+LATENCY_LOG_PATH = os.path.join(os.path.dirname(__file__), '..', 'latency_log.csv')
 
 
 def load_csv():
     with open(CSV_PATH) as f:
         rows = [r for r in csv.DictReader(f) if r.get('label', '') not in ('', 'label')]
+    return rows
+
+
+def load_eval_results():
+    """eval_real_crossval.py가 저장한 JSON 결과 로드"""
+    if not os.path.exists(EVAL_RESULTS_PATH):
+        print(f"  [경고] {EVAL_RESULTS_PATH} 없음 — eval_real_crossval.py를 먼저 실행하세요.")
+        return None
+    with open(EVAL_RESULTS_PATH) as f:
+        return json.load(f)
+
+
+def load_latency_log():
+    """xapp_msjc.py가 저장한 latency CSV 로드"""
+    if not os.path.exists(LATENCY_LOG_PATH):
+        return None
+    rows = []
+    with open(LATENCY_LOG_PATH) as f:
+        for r in csv.DictReader(f):
+            rows.append(r)
     return rows
 
 
@@ -47,7 +74,6 @@ def fig_kpm_timeseries():
     modes_order = ['Normal', 'Constant', 'Random', 'Reactive']
     colors = {'Normal': '#2196F3', 'Constant': '#D32F2F', 'Random': '#F57C00', 'Reactive': '#7B1FA2'}
 
-    # IEEE double-column width (~7 in) or single-column (3.5 in)
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 2.8), sharex=True)
 
     x_offset = 0
@@ -136,18 +162,28 @@ def fig_confusion_matrix():
 # ─────────────────────────────────────────────
 def fig_detection_comparison():
     """Bar chart: Stage 1 alone vs Combined (Stage 1 + Stage 2) detection rates.
-    Updated with real cross-validation results (Table 2).
+    eval_results.json에서 동적으로 로드.
     """
-    modes = ['Constant', 'Random', 'Reactive', 'Deceptive', 'PSS', 'PDCCH', 'DMRS']
-    # Stage 1 cross-validation detection rates (Table 2)
-    s1_only = [100.0, 66.4, 63.0, 0.0, 0.0, 0.0, 0.0]
-    # Combined Stage 1 + Stage 2: all attacks detected at 100%
-    s1_s2 = [100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0]
+    results = load_eval_results()
+    if results is None:
+        print('  [SKIP] fig_detection_comparison — eval_results.json 없음')
+        return
 
-    x = np.arange(len(modes))
+    attack_modes = ['Constant', 'Random', 'Reactive', 'Deceptive', 'PSS', 'PDCCH', 'DMRS']
+    s1_only = []
+    s1_s2 = []
+    for mode in attack_modes:
+        m = results["modes"].get(mode, {})
+        s1_only.append(m.get("s1_det_rate", 0))
+        s1_s2.append(m.get("combined_det_rate", 0))
+
+    # Normal FA rate
+    normal = results["modes"].get("Normal", {})
+    fa_rate = normal.get("combined_fa_rate", 0)
+
+    x = np.arange(len(attack_modes))
     width = 0.32
 
-    # IEEE single-column width: 3.5 inches
     fig, ax = plt.subplots(figsize=(3.5, 2.4))
     bars1 = ax.bar(x - width/2, s1_only, width, label='Stage 1 Only',
                    color='#B0BEC5', edgecolor='#546E7A', linewidth=0.5)
@@ -156,12 +192,11 @@ def fig_detection_comparison():
 
     ax.set_ylabel('Detection Rate (%)', fontsize=8)
     ax.set_xticks(x)
-    ax.set_xticklabels(modes, fontsize=6.5, rotation=25, ha='right')
+    ax.set_xticklabels(attack_modes, fontsize=6.5, rotation=25, ha='right')
     ax.set_ylim(0, 118)
     ax.legend(loc='upper left', fontsize=6.5, framealpha=0.9)
     ax.axhline(y=100, color='#4CAF50', linestyle=':', linewidth=0.6, alpha=0.6)
 
-    # Value labels on Stage 1 bars
     for bar in bars1:
         h = bar.get_height()
         if h > 0:
@@ -171,8 +206,7 @@ def fig_detection_comparison():
             ax.text(bar.get_x() + bar.get_width()/2, 2, '0',
                     ha='center', va='bottom', fontsize=5.5, color='#999')
 
-    # False alarm annotation
-    ax.annotate('FA=1.3%', xy=(0.02, 0.94), xycoords='axes fraction',
+    ax.annotate(f'FA={fa_rate:.1f}%', xy=(0.02, 0.94), xycoords='axes fraction',
                 fontsize=6, color='#D32F2F', style='italic')
 
     ax.tick_params(axis='y', labelsize=7)
@@ -192,7 +226,6 @@ def fig_spectrograms():
     attacks = ['PSS/SSS', 'PDCCH', 'DMRS', 'Generic Deceptive']
     titles = ['(a) PSS/SSS', '(b) PDCCH', '(c) DMRS', '(d) Deceptive']
 
-    # IEEE single-column: 3.5 in wide
     fig, axes = plt.subplots(1, 4, figsize=(3.5, 1.2))
     for i, (attack, title) in enumerate(zip(attacks, titles)):
         iq = simulate_attack(attack, gain_factor=1.5)
@@ -215,26 +248,105 @@ def fig_spectrograms():
 # Fig 5: Latency CDF
 # ─────────────────────────────────────────────
 def fig_latency():
-    # MockFlexRIC 로그 기반 latency 시뮬레이션
-    np.random.seed(42)
-    clean = np.random.uniform(1, 5, 500)
-    attack = np.random.uniform(1, 3, 200)
-    protocol = np.random.uniform(35, 75, 150)
+    """실제 latency_log.csv 기반 CDF. 없으면 MockFlexRIC 벤치마크 수행."""
+    lat_rows = load_latency_log()
+
+    if lat_rows and len(lat_rows) >= 10:
+        # 실측 latency 데이터 사용
+        print('  [INFO] latency_log.csv에서 실측 데이터 로드')
+        path_data = defaultdict(list)
+        for r in lat_rows:
+            verdict = r.get('verdict', r.get('final_verdict', 'CLEAN'))
+            lat_ms = float(r['latency_ms'])
+            path_data[verdict].append(lat_ms)
+
+        # verdict를 표준 path로 매핑
+        path_map = {
+            'CLEAN': 'CLEAN',
+            'ATTACK_CONFIRMED': 'ATTACK_CONFIRMED',
+            'FN_CAUGHT': 'FN_CAUGHT',
+            'PROTOCOL_AWARE': 'PROTOCOL_AWARE',
+        }
+        plot_data = {}
+        for verdict, lats in path_data.items():
+            key = path_map.get(verdict, verdict)
+            if key in plot_data:
+                plot_data[key].extend(lats)
+            else:
+                plot_data[key] = list(lats)
+    else:
+        # latency_log.csv 없으면 실제 모델 추론으로 벤치마크
+        print('  [INFO] latency_log.csv 없음 — 모델 추론 벤치마크 수행')
+        import time
+        from stage1_mlp import load_model as load_s1, classify as s1_classify
+        from kpi_feature_extractor import simulate_kpi_chunk
+
+        s1_model, s1_scaler, s1_device = load_s1()
+
+        # Stage 1 only (CLEAN / ATTACK_CONFIRMED)
+        clean_lats = []
+        attack_lats = []
+        for _ in range(300):
+            features = simulate_kpi_chunk("Normal")
+            t0 = time.perf_counter()
+            label, conf, _ = s1_classify(features, s1_model, s1_scaler, s1_device)
+            elapsed = (time.perf_counter() - t0) * 1000
+            clean_lats.append(elapsed)
+
+        for mode in ["Constant", "Random", "Reactive"]:
+            for _ in range(100):
+                features = simulate_kpi_chunk(mode)
+                t0 = time.perf_counter()
+                label, conf, _ = s1_classify(features, s1_model, s1_scaler, s1_device)
+                elapsed = (time.perf_counter() - t0) * 1000
+                attack_lats.append(elapsed)
+
+        # Stage 1 + Stage 3 (PROTOCOL_AWARE)
+        from stage3_mobilenet import load_model as load_s3, classify as s3_classify, simulate_attack
+        s3_model, s3_device = load_s3()
+        proto_lats = []
+        for attack_type in ["PSS/SSS", "PDCCH", "DMRS", "Generic Deceptive"]:
+            for _ in range(40):
+                iq = simulate_attack(attack_type)
+                features = simulate_kpi_chunk("Deceptive")
+                t0 = time.perf_counter()
+                s1_classify(features, s1_model, s1_scaler, s1_device)
+                s3_classify(iq, s3_model, s3_device)
+                elapsed = (time.perf_counter() - t0) * 1000
+                proto_lats.append(elapsed)
+
+        plot_data = {
+            'CLEAN': clean_lats,
+            'ATTACK_CONFIRMED': attack_lats,
+            'PROTOCOL_AWARE': proto_lats,
+        }
+
+    color_map = {
+        'CLEAN': '#4CAF50',
+        'ATTACK_CONFIRMED': '#D32F2F',
+        'FN_CAUGHT': '#FF9800',
+        'PROTOCOL_AWARE': '#F57C00',
+    }
 
     fig, ax = plt.subplots(figsize=(3.5, 2.4))
-    for data, label, color in [
-        (clean, 'CLEAN', '#4CAF50'),
-        (attack, 'ATTACK_CONFIRMED', '#D32F2F'),
-        (protocol, 'PROTOCOL_AWARE', '#F57C00'),
-    ]:
+    for path_name in ['CLEAN', 'ATTACK_CONFIRMED', 'FN_CAUGHT', 'PROTOCOL_AWARE']:
+        data = plot_data.get(path_name)
+        if not data:
+            continue
         sorted_d = np.sort(data)
         cdf = np.arange(1, len(sorted_d) + 1) / len(sorted_d)
-        ax.plot(sorted_d, cdf, label=label, color=color, linewidth=1.2)
+        ax.plot(sorted_d, cdf, label=path_name, color=color_map.get(path_name, '#333'),
+                linewidth=1.2)
 
     ax.axvline(x=100, color='red', linestyle='--', linewidth=0.8, label='100 ms Budget')
     ax.set_xlabel('Inference Latency (ms)', fontsize=8)
     ax.set_ylabel('CDF', fontsize=8)
-    ax.set_xlim(0, 120)
+    # x축 범위를 데이터에 맞춤
+    all_lats = [v for vals in plot_data.values() for v in vals]
+    if all_lats:
+        ax.set_xlim(0, max(max(all_lats) * 1.2, 110))
+    else:
+        ax.set_xlim(0, 120)
     ax.legend(fontsize=6, loc='lower right')
     ax.tick_params(axis='both', labelsize=7)
     plt.tight_layout(pad=0.3)
@@ -248,29 +360,46 @@ def fig_latency():
 # Fig 6: Stage 3 실측 I/Q 분류 정확도 비교
 # ─────────────────────────────────────────────
 def fig_stage3_accuracy():
-    classes = ['PSS/SSS', 'PDCCH', 'DMRS', 'Deceptive']
-    before = [14, 100, 0, 0]   # 합성만
-    after = [86, 90, 76, 100]  # fine-tuned
+    """Stage 3 MobileNetV3 정확도 — 실제 모델 추론으로 측정"""
+    from stage3_mobilenet import (load_model, classify, simulate_attack,
+                                   LABELS as S3_LABELS, LABEL_IDX as S3_LABEL_IDX)
 
-    x = np.arange(len(classes))
-    width = 0.35
+    model, device = load_model()
+    n_test = 100  # 클래스당 테스트 샘플 수
+
+    # Synthetic-only 정확도: 현재 모델로 합성 테스트
+    classes = S3_LABELS  # ['PSS/SSS', 'PDCCH', 'DMRS', 'Generic Deceptive']
+    display_classes = ['PSS/SSS', 'PDCCH', 'DMRS', 'Deceptive']
+    accuracies = []
+
+    for attack_type in classes:
+        correct = 0
+        for _ in range(n_test):
+            gain = np.random.uniform(0.5, 2.5)
+            iq = simulate_attack(attack_type, gain_factor=gain)
+            label, conf, _ = classify(iq, model, device)
+            if label == attack_type:
+                correct += 1
+        acc = correct / n_test * 100
+        accuracies.append(acc)
+        print(f'  Stage3 {attack_type}: {acc:.0f}% ({correct}/{n_test})')
+
+    x = np.arange(len(display_classes))
+    width = 0.5
 
     fig, ax = plt.subplots(figsize=(3.5, 2.4))
-    ax.bar(x - width/2, before, width, label='Synthetic Only',
-           color='#FFCDD2', edgecolor='#E57373', linewidth=0.5)
-    ax.bar(x + width/2, after, width, label='Fine-tuned (Real I/Q)',
-           color='#C62828', edgecolor='#B71C1C', linewidth=0.5)
+    bars = ax.bar(x, accuracies, width, label='Current Model',
+                  color='#1565C0', edgecolor='#0D47A1', linewidth=0.5)
 
     ax.set_ylabel('Classification Accuracy (%)', fontsize=8)
     ax.set_xticks(x)
-    ax.set_xticklabels(classes, fontsize=7)
+    ax.set_xticklabels(display_classes, fontsize=7)
     ax.set_ylim(0, 118)
     ax.legend(fontsize=6.5)
     ax.tick_params(axis='both', labelsize=7)
 
-    for i, (b, a) in enumerate(zip(before, after)):
-        ax.text(i - width/2, b + 2, f'{b}%', ha='center', fontsize=6)
-        ax.text(i + width/2, a + 2, f'{a}%', ha='center', fontsize=6)
+    for i, acc in enumerate(accuracies):
+        ax.text(i, acc + 2, f'{acc:.0f}%', ha='center', fontsize=6)
 
     plt.tight_layout(pad=0.3)
     out = os.path.join(OUTDIR, 'fig_stage3_accuracy.pdf')
@@ -317,6 +446,7 @@ def fig_bler_boxplot():
 # LaTeX Tables 출력
 # ─────────────────────────────────────────────
 def print_latex_tables():
+    # ── Table 1: KPM Statistics (실측 데이터) ──
     print('\n=== LaTeX Table: KPM Statistics ===')
     rows = load_csv()
     modes = ['Normal', 'Constant', 'Random', 'Reactive', 'Deceptive', 'PSS', 'PDCCH', 'DMRS']
@@ -357,6 +487,8 @@ def print_latex_tables():
     print(r'\end{tabular}')
     print(r'\end{table}')
 
+    # ── Table 2: Detection Rate (eval_results.json) ──
+    results = load_eval_results()
     print('\n=== LaTeX Table: Combined Detection Rate ===')
     print(r'\begin{table}[t]')
     print(r'\centering')
@@ -367,22 +499,28 @@ def print_latex_tables():
     print(r'\toprule')
     print(r'Mode & Stage 1 & Stage 2 & Combined \\')
     print(r'\midrule')
-    det_data = [
-        ('Normal (FA)', '1.3\\%', '0\\%', '\\textbf{1.3\\%}'),
-        ('Constant', '100\\%', '100\\%', '\\textbf{100\\%}'),
-        ('Random', '66.4\\%', '100\\%', '\\textbf{100\\%}'),
-        ('Reactive', '63.0\\%', '100\\%', '\\textbf{100\\%}'),
-        ('Deceptive', '0\\%', '100\\%', '\\textbf{100\\%}'),
-        ('PSS', '0\\%', '100\\%', '\\textbf{100\\%}'),
-        ('PDCCH', '0\\%', '100\\%', '\\textbf{100\\%}'),
-        ('DMRS', '0\\%', '100\\%', '\\textbf{100\\%}'),
-    ]
-    for row in det_data:
-        print(f'{row[0]} & {row[1]} & {row[2]} & {row[3]} \\\\')
+
+    if results:
+        for mode in ['Normal'] + [m for m in modes if m != 'Normal']:
+            m = results["modes"].get(mode, {})
+            if mode == "Normal":
+                s1_val = f'{m.get("s1_fa_rate", 0):.1f}\\%'
+                s2_val = f'{m.get("s2_fa_rate", 0):.1f}\\%'
+                comb_val = f'\\textbf{{{m.get("combined_fa_rate", 0):.1f}\\%}}'
+                print(f'Normal (FA) & {s1_val} & {s2_val} & {comb_val} \\\\')
+            else:
+                s1_val = f'{m.get("s1_det_rate", 0):.1f}\\%'
+                s2_val = f'{m.get("s2_det_rate", 0):.1f}\\%'
+                comb_val = f'\\textbf{{{m.get("combined_det_rate", 0):.1f}\\%}}'
+                print(f'{mode} & {s1_val} & {s2_val} & {comb_val} \\\\')
+    else:
+        print(r'% [경고] eval_results.json 없음 — eval_real_crossval.py 실행 필요')
+
     print(r'\bottomrule')
     print(r'\end{tabular}')
     print(r'\end{table}')
 
+    # ── Table 3: Latency Breakdown (실측/벤치마크) ──
     print('\n=== LaTeX Table: Latency Breakdown ===')
     print(r'\begin{table}[t]')
     print(r'\centering')
@@ -393,15 +531,85 @@ def print_latex_tables():
     print(r'\toprule')
     print(r'Path & Stages & Latency (ms) \\')
     print(r'\midrule')
-    print(r'CLEAN & S1$\rightarrow$S2 & 1--4 \\')
-    print(r'ATTACK\_CONFIRMED & S1 & 1--2 \\')
-    print(r'FN\_CAUGHT & S1$\rightarrow$S2$\rightarrow$S3 & 43--55 \\')
-    print(r'PROTOCOL\_AWARE & S1$\rightarrow$S3 & 40--73 \\')
+
+    lat_rows = load_latency_log()
+    if lat_rows and len(lat_rows) >= 10:
+        path_lats = defaultdict(list)
+        for r in lat_rows:
+            verdict = r.get('verdict', r.get('final_verdict', 'CLEAN'))
+            path_lats[verdict].append(float(r['latency_ms']))
+
+        path_info = [
+            ('CLEAN', r'S1$\rightarrow$S2'),
+            ('ATTACK_CONFIRMED', r'S1'),
+            ('FN_CAUGHT', r'S1$\rightarrow$S2$\rightarrow$S3'),
+            ('PROTOCOL_AWARE', r'S1$\rightarrow$S3'),
+        ]
+        for path_name, stages in path_info:
+            lats = path_lats.get(path_name, [])
+            if lats:
+                lo, hi = np.percentile(lats, 5), np.percentile(lats, 95)
+                print(f'{path_name.replace("_", r"\\_")} & {stages} & {lo:.1f}--{hi:.1f} \\\\')
+    else:
+        print(r'% [경고] latency_log.csv 없음 — xapp_msjc.py 실행 필요')
+        print(r'% 아래는 벤치마크 추론 기반 범위')
+        # 실제 모델 추론 벤치마크로 대체
+        import time
+        from stage1_mlp import load_model as load_s1, classify as s1_classify
+        from kpi_feature_extractor import simulate_kpi_chunk
+
+        s1_model, s1_scaler, s1_device = load_s1()
+
+        # S1 only
+        s1_lats = []
+        for _ in range(200):
+            feat = simulate_kpi_chunk("Normal")
+            t0 = time.perf_counter()
+            s1_classify(feat, s1_model, s1_scaler, s1_device)
+            s1_lats.append((time.perf_counter() - t0) * 1000)
+
+        # S1+S3
+        from stage3_mobilenet import load_model as load_s3, classify as s3_classify, simulate_attack
+        s3_model, s3_device = load_s3()
+        s1s3_lats = []
+        for _ in range(100):
+            feat = simulate_kpi_chunk("Deceptive")
+            iq = simulate_attack("PSS/SSS")
+            t0 = time.perf_counter()
+            s1_classify(feat, s1_model, s1_scaler, s1_device)
+            s3_classify(iq, s3_model, s3_device)
+            s1s3_lats.append((time.perf_counter() - t0) * 1000)
+
+        s1_lo, s1_hi = np.percentile(s1_lats, 5), np.percentile(s1_lats, 95)
+        s1s3_lo, s1s3_hi = np.percentile(s1s3_lats, 5), np.percentile(s1s3_lats, 95)
+        print(f'CLEAN & S1$\\rightarrow$S2 & {s1_lo:.1f}--{s1_hi:.1f} \\\\')
+        print(f'ATTACK\\_CONFIRMED & S1 & {s1_lo:.1f}--{s1_hi:.1f} \\\\')
+        print(f'PROTOCOL\\_AWARE & S1$\\rightarrow$S3 & {s1s3_lo:.1f}--{s1s3_hi:.1f} \\\\')
+
     print(r'\midrule')
     print(r'\multicolumn{2}{l}{Near-RT RIC Budget} & $\leq$ \textbf{100} \\')
     print(r'\bottomrule')
     print(r'\end{tabular}')
     print(r'\end{table}')
+
+    # ── Table 4: Comparison with Prior Work (문헌 비교는 고정) ──
+    results = load_eval_results()
+    # 동적 값: 우리 detection rate, max latency
+    our_det = "100\\%"
+    our_lat = "N/A"
+    if results:
+        # 모든 attack mode의 combined detection rate 중 최소값
+        attack_dets = []
+        for mode in ['Constant', 'Random', 'Reactive', 'Deceptive', 'PSS', 'PDCCH', 'DMRS']:
+            m = results["modes"].get(mode, {})
+            attack_dets.append(m.get("combined_det_rate", 0))
+        min_det = min(attack_dets) if attack_dets else 0
+        our_det = f'{min_det:.1f}\\%'
+
+    lat_rows_check = load_latency_log()
+    if lat_rows_check and len(lat_rows_check) >= 10:
+        all_lats = [float(r['latency_ms']) for r in lat_rows_check]
+        our_lat = f'$\\leq${int(np.percentile(all_lats, 99))}ms'
 
     print('\n=== LaTeX Table: Comparison with Prior Work ===')
     print(r'\begin{table}[t]')
@@ -419,8 +627,8 @@ def print_latex_tables():
     print(r'O-RAN xApp & $\times$ & \checkmark & \textbf{\checkmark} \\')
     print(r'Closed-loop & $\times$ & \checkmark & \textbf{\checkmark} \\')
     print(r'Sliding Window & $\times$ & $\times$ & \textbf{\checkmark} \\')
-    print(r'Detection Rate & 94.5\% & N/A & \textbf{100\%} \\')
-    print(r'Latency & N/A & N/A & \textbf{$\leq$73ms} \\')
+    print(f'Detection Rate & 94.5\\% & N/A & \\textbf{{{our_det}}} \\\\')
+    print(f'Latency & N/A & N/A & \\textbf{{{our_lat}}} \\\\')
     print(r'\bottomrule')
     print(r'\end{tabular}')
     print(r'\end{table}')

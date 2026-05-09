@@ -40,7 +40,7 @@ LABEL_IDX = {name: i for i, name in enumerate(LABELS)}
 NUM_CLASSES = len(LABELS)
 
 IMG_SIZE   = 224    # 논문 스펙
-N_FFT_OFDM = 1024  # 시뮬레이션용 OFDM FFT 크기
+N_FFT_OFDM = 1536  # jammer.py와 동일 (Band3 20MHz, 15kHz SCS)
 
 
 # ─────────────────────────────────────────────
@@ -110,7 +110,7 @@ def simulate_attack(attack_type: str, gain_factor: float = 1.0) -> np.ndarray:
         return _simulate_freq_domain(n, gain_factor, fill)
 
     elif attack_type == "DMRS":
-        comb = np.random.choice([4, 6])
+        comb = 2  # jammer.py DMRS comb-2와 일치
         offset = np.random.randint(0, comb)
         def fill(freq, g):
             idx = np.arange(offset, N_FFT_OFDM, comb)

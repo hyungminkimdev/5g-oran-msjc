@@ -4,11 +4,13 @@
 kpm_fdd_alldata.csv (1,733개)를 사용하여 실측 accuracy를 검증한다.
 
 출력: per-class detection rate, confusion matrix, false alarm rate
+결과를 eval_results.json으로 저장하여 generate_paper_figures.py에서 사용
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import csv
+import json
 import numpy as np
 from collections import defaultdict
 from sklearn.model_selection import StratifiedKFold
@@ -16,6 +18,8 @@ from sklearn.metrics import classification_report, confusion_matrix
 
 from kpi_feature_extractor import csv_row_to_features, NUM_FEATURES
 from stage2_ksvm import extract_window_features, WINDOW_SIZE, NUM_WINDOW_FEATURES
+
+RESULTS_PATH = os.path.join(os.path.dirname(__file__), "..", "eval_results.json")
 
 # ─────────────────────────────────────────────
 # Stage 1: MLP on real data
@@ -271,6 +275,55 @@ def eval_stage2_holdout(csv_path: str, window_size: int = WINDOW_SIZE, train_rat
     return pipeline, s2_holdout
 
 
+def save_results(s1_results, s2_results, s2_holdout, total_samples):
+    """모든 evaluation 결과를 JSON으로 저장"""
+    modes = ["Normal", "Constant", "Random", "Reactive",
+             "Deceptive", "PSS", "PDCCH", "DMRS"]
+
+    results = {
+        "total_samples": total_samples,
+        "modes": {},
+    }
+
+    for mode in modes:
+        s1 = s1_results.get(mode, {})
+        s2 = s2_results.get(mode, {})
+        s2h = s2_holdout.get(mode, {})
+
+        entry = {"n_samples": s1.get("n", 0)}
+
+        if mode == "Normal":
+            s1_fa = s1.get("fa_rate", 0)
+            s2_fa = s2.get("det_rate", 0)
+            s2h_fa = s2h.get("fa_rate", 0)
+            # Combined는 holdout 기준 (unbiased)
+            combined_fa = s1_fa + (1 - s1_fa) * s2h_fa
+            entry["s1_fa_rate"] = round(s1_fa * 100, 2)
+            entry["s2_fa_rate"] = round(s2_fa * 100, 2)
+            entry["s2_holdout_fa_rate"] = round(s2h_fa * 100, 2)
+            entry["combined_fa_rate"] = round(combined_fa * 100, 2)
+        else:
+            s1_det = s1.get("det_rate", 0)
+            s2_det = s2.get("det_rate", 0)
+            s2h_det = s2h.get("det_rate", 0)
+            # Combined는 holdout 기준 (unbiased)
+            combined_det = s1_det + (1 - s1_det) * s2h_det
+            entry["s1_det_rate"] = round(s1_det * 100, 2)
+            entry["s2_det_rate"] = round(s2_det * 100, 2)
+            entry["s2_holdout_det_rate"] = round(s2h_det * 100, 2)
+            entry["combined_det_rate"] = round(combined_det * 100, 2)
+
+        if mode in s2:
+            entry["s2_n_windows"] = s2.get("n_windows", 0)
+
+        results["modes"][mode] = entry
+
+    with open(RESULTS_PATH, "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"\n[저장] eval_results.json → {RESULTS_PATH}")
+    return results
+
+
 if __name__ == "__main__":
     csv_path = os.path.join(os.path.dirname(__file__), "..", "kpm_fdd_alldata.csv")
 
@@ -307,3 +360,6 @@ if __name__ == "__main__":
             combined_det = s1_det + (1 - s1_det) * s2_det
             n = s1.get("n", "?")
             print(f"  {mode:<12s}: S1={s1_det:.4f}, S2(holdout)={s2_det:.4f}, Combined≈{combined_det:.4f} (N={n})")
+
+    # JSON으로 결과 저장
+    save_results(s1_results, s2_results, s2_holdout, len(X))
