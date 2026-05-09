@@ -22,9 +22,9 @@ E2SM-KPM (1s) → [Stage 1: MLP 5-class] → Constant/Random/Reactive → ATTACK
 | Metric | Value |
 |--------|-------|
 | **Detection Rate** | 100% (all 7 modes, S1+S2 combined, real data hold-out) |
-| **False Alarm** | 1.3% (held-out real testbed data, N=325 windows) |
-| **Latency** | ≤ 73 ms (within Near-RT RIC 100 ms budget) |
-| **Protocol Classification** | PSS 86%, PDCCH 90%, DMRS 76%, Deceptive 100% |
+| **False Alarm** | 1.25% (held-out real testbed data, N=325 windows) |
+| **Latency** | ≤ 23 ms p95 (well within Near-RT RIC 100 ms budget) |
+| **Protocol Classification** | PSS 94%, PDCCH 72%, DMRS 84%, Deceptive 90% (85% overall, real I/Q) |
 
 ## Architecture
 
