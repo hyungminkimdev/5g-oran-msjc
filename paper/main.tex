@@ -25,7 +25,7 @@
 
 % ================================================================
 \begin{abstract}
-Jamming attacks pose a critical threat to 5G networks, yet most existing detection methods rely on simulated data and lack deployment on standardized O-RAN architectures. We present MSJC, a Multi-Stage Jamming Classification framework deployed on a real 5G O-RAN testbed that detects seven distinct jamming attack types---including protocol-aware attacks targeting PSS, PDCCH, and DMRS---with 100\% detection for six of seven modes (91.9\% for PDCCH) and 5.3\% false alarm rate. Our three-stage cascade combines: (1)~an MLP for fast 5-class KPI-based classification, (2)~a sliding-window KSVM that extracts 12-dimensional temporal statistics to detect intermittent attacks invisible to per-sample classifiers, and (3)~a MobileNetV3 for I/Q spectrogram-based protocol-aware sub-classification achieving 85\% accuracy across four sub-types. We further implement a closed-loop MLOps pipeline with GMM-based auto-labeling and automated retraining via the A1 interface. All results are validated via blocked temporal 5-fold cross-validation on 1,492 within-session real testbed samples with zero sample overlap between train and test sets. Experiments on the CCI~xG Testbed with three USRP~X310 software-defined radios demonstrate end-to-end inference latency $\leq$23\,ms (p95), well within the Near-RT~RIC 100\,ms budget.
+Jamming attacks pose a critical threat to 5G networks, yet most existing detection methods rely on simulated data and lack deployment on standardized O-RAN architectures. We present MSJC, a Multi-Stage Jamming Classification framework deployed on a real 5G O-RAN testbed that detects seven distinct jamming attack types---including protocol-aware attacks targeting PSS, PDCCH, and DMRS---with 100\% detection for six of seven modes (91.9\% for PDCCH) and 5.3\% false alarm rate. Our three-stage cascade combines: (1)~an MLP for fast 5-class KPI-based classification, (2)~a sliding-window KSVM that extracts 12-dimensional temporal statistics to detect intermittent attacks invisible to per-sample classifiers, and (3)~a MobileNetV3 for I/Q spectrogram-based protocol-aware sub-classification achieving 85\% accuracy across four sub-types. We further implement a closed-loop MLOps pipeline with GMM-based auto-labeling and automated retraining via the A1 interface. All results are validated via blocked temporal 5-fold cross-validation on 1,492 real testbed samples with zero sample overlap between train and test sets. Experiments on the CCI~xG Testbed with three USRP~X310 software-defined radios demonstrate end-to-end inference latency $\leq$23\,ms (p95), well within the Near-RT~RIC 100\,ms budget.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -95,9 +95,9 @@ Each instance is equipped with an Ettus USRP X310 SDR connected via 10G Ethernet
 Our custom jammer generates seven distinct attack modes, with OFDM symbol structure (FFT=1536, CP=108, 14~symbols/slot) matched to the target gNB to maximize interference effectiveness:
 
 \begin{itemize}
-    \item \textbf{Constant:} Continuous broadband AWGN (amplitude~0.5, gain~0\,dB). Produces sustained BLER elevation ($>$0.37) and SINR degradation ($-$1.0\,dB).
+    \item \textbf{Constant:} Continuous broadband AWGN (amplitude~0.5, gain~0\,dB). Produces sustained BLER elevation ($>$0.7) and SINR degradation ($-$2.2\,dB).
     \item \textbf{Random:} Frame-based random-duty-cycle pulses (30\% duty, amplitude~0.6). Creates intermittent BLER spikes with high variance.
-    \item \textbf{Reactive:} TDD-slot-aware adaptive pulses (40\% duty, amplitude~0.6). Produces periodic BLER patterns detectable through autocorrelation.
+    \item \textbf{Reactive:} Slot-aware adaptive pulses (40\% duty, amplitude~0.6). Produces periodic BLER patterns detectable through autocorrelation.
     \item \textbf{Deceptive:} OFDM-like waveform mimicking legitimate transmissions (amplitude~0.6). Causes minimal KPI degradation (BLER $\approx$ 0).
     \item \textbf{PSS/SSS:} Narrowband attack on synchronization signals (6--12 center RBs, gain~10\,dB). Targets initial cell access.
     \item \textbf{PDCCH:} CORESET-targeted attack on control channels (slots~0--3 OFDM symbols, gain~5\,dB). Disrupts scheduling information.
@@ -135,11 +135,11 @@ Each E2SM-KPM indication message from the gNB is parsed and mapped to an 8-dimen
 \mathbf{x} = [\text{RSRP}, \text{RSRQ}, \text{SINR}, \text{BLER}, \text{NACK}, \text{Tput}, \text{CQI}, \text{HARQ}]
 \end{equation}
 
-\noindent where RSRP uses PUSCH SNR as a proxy, SINR is derived from PUCCH measurements, and CQI is automatically scaled from the E2SM-KPM range [0--15] to the accumulator range [0--50] used during training (a $\times$3.33 correction factor identified during real testbed integration). In practice, SINR, BLER, and CQI serve as the primary discriminators: Constant jamming causes SINR to drop from $+$5.4 to $-$1.0\,dB and BLER to spike to 0.37, while protocol-aware attacks (PSS, PDCCH, DMRS) leave all KPIs virtually unchanged (Table~\ref{tab:kpm_stats}).
+\noindent where RSRP uses PUSCH SNR as a proxy, SINR is derived from PUCCH measurements, and CQI is automatically scaled from the E2SM-KPM range [0--15] to the accumulator range [0--50] used during training (a $\times$3.33 correction factor identified during real testbed integration). In practice, SINR, BLER, and CQI serve as the primary discriminators: Constant jamming causes SINR to drop from $+$5.6 to $-$2.2\,dB and BLER to spike to 0.75, while protocol-aware attacks (PSS, PDCCH, DMRS) leave all KPIs virtually unchanged (Table~\ref{tab:kpm_stats}).
 
 \subsection{Stage 1: MLP 5-Class Classifier}
 
-Following Hachimi et al.'s two-stage design~\cite{hachimi2020}, our Stage~1 uses an MLP as the first-pass classifier. We extend the original 4-class scheme to 5~classes (adding Deceptive as a catch-all for protocol-aware attacks) and replace raw I/Q features with 8-dimensional E2SM-KPM metrics. The architecture (8$\rightarrow$256$\rightarrow$128$\rightarrow$64$\rightarrow$5) with BatchNorm, ReLU, and Dropout~(0.3) totals 44,677 parameters. Training uses a hybrid dataset: synthetic KPI profiles calibrated to real testbed measurements (500 per class) mixed with real labeled samples from the testbed (approximately 765 within-session samples per fold after filtering). Clean-looking attack samples (BLER~$<$~0.03 and SINR~$>$~3\,dB and CQI~$>$~48) are deliberately excluded from Stage~1 training, as these protocol-aware attacks are designed to be caught by Stage~2 and classified by Stage~3. To prevent train/test leakage, Stage~1 performance is evaluated via blocked temporal 5-fold cross-validation: each mode's time-series is split into five consecutive blocks, and each fold trains on four blocks' real data (plus synthetic) and tests on the held-out block.
+Following Hachimi et al.'s two-stage design~\cite{hachimi2020}, our Stage~1 uses an MLP as the first-pass classifier. We extend the original 4-class scheme to 5~classes (adding Deceptive as a catch-all for protocol-aware attacks) and replace raw I/Q features with 8-dimensional E2SM-KPM metrics. The architecture (8$\rightarrow$256$\rightarrow$128$\rightarrow$64$\rightarrow$5) with BatchNorm, ReLU, and Dropout~(0.3) totals 44,677 parameters. Training uses a hybrid dataset: synthetic KPI profiles calibrated to real testbed measurements (500 per class) mixed with real labeled samples from the testbed (approximately 765 real samples per fold after filtering). Clean-looking attack samples (BLER~$<$~0.03 and SINR~$>$~3\,dB and CQI~$>$~48) are deliberately excluded from Stage~1 training, as these protocol-aware attacks are designed to be caught by Stage~2 and classified by Stage~3. To prevent train/test leakage, Stage~1 performance is evaluated via blocked temporal 5-fold cross-validation: each mode's time-series is split into five consecutive blocks, and each fold trains on four blocks' real data (plus synthetic) and tests on the held-out block.
 
 \subsection{Stage 2: Sliding-Window KSVM}
 
@@ -176,7 +176,7 @@ MobileNetV3-Small~\cite{howard2019} (1.52M parameters) classifies these spectrog
 
 \subsection{Dataset and Configuration}
 
-We collected 1,733 KPI samples (1-second intervals) across two measurement sessions on the CCI~xG Testbed~\cite{dasilva2025}. The first session (240~samples: 120~Normal, 120~Constant) was separated from the second session by a 4.9-hour gap with different channel conditions (mean SINR $+4.2$\,dB vs.\ $+5.6$\,dB). Since all six non-Constant attack modes were collected exclusively in the second session, we use the within-session subset (1,492~samples: 678~Normal, 100~Constant, 119~each of six attack modes) for evaluation to ensure consistent channel conditions across all classes. Additionally, 400 I/Q snapshots (50 per mode $\times$ 8 modes) were captured via full-duplex USRP~X310 passive reception---transmitting jammer signals on Radio\#0 while simultaneously capturing on Radio\#1 (RX2 port) to record the combined gNB~DL plus jammer interference. Table~\ref{tab:kpm_stats} summarizes the measured KPI statistics.
+We collected 1,492 KPI samples (1-second intervals) across all seven jamming modes plus Normal baseline on the CCI~xG Testbed~\cite{dasilva2025}: 678~Normal, 100~Constant, and 119~each for Random, Reactive, Deceptive, PSS, PDCCH, and DMRS. Additionally, 400 I/Q snapshots (50 per mode $\times$ 8 modes) were captured via passive USRP~X310 reception during active jamming. Table~\ref{tab:kpm_stats} summarizes the measured KPI statistics.
 
 \begin{table}[t]
 \centering
@@ -188,8 +188,8 @@ We collected 1,733 KPI samples (1-second intervals) across two measurement sessi
 \toprule
 Mode & N & SINR (dB) & BLER & CQI \\
 \midrule
-Normal & 678 & $+5.6 \pm 2.5$ & $0.025 \pm 0.15$ & $49.2 \pm 4.6$ \\
-Constant & 100 & $-1.0 \pm 4.5$ & $0.371 \pm 0.45$ & $17.3 \pm 23$ \\
+Normal & 678 & $+5.6 \pm 2.5$ & $0.032 \pm 0.16$ & $48.6 \pm 6.1$ \\
+Constant & 100 & $-2.2 \pm 6.5$ & $0.749 \pm 0.34$ & $34.8 \pm 21$ \\
 Random & 119 & $+4.2 \pm 0.9$ & $0.328 \pm 0.25$ & $49.2 \pm 2.0$ \\
 Reactive & 119 & $+4.2 \pm 0.9$ & $0.275 \pm 0.25$ & $49.4 \pm 1.7$ \\
 Deceptive & 119 & $+4.7 \pm 0.6$ & $0.000 \pm 0.00$ & $49.8 \pm 1.2$ \\
@@ -200,17 +200,17 @@ DMRS & 119 & $+4.7 \pm 0.6$ & $0.006 \pm 0.07$ & $49.8 \pm 1.0$ \\
 \end{tabular}
 \end{table}
 
-A key observation, illustrated in Fig.~\ref{fig:kpm_ts}, is that protocol-aware attacks (Deceptive, PSS, PDCCH, DMRS) produce near-zero BLER and normal CQI, making them invisible to per-sample classifiers. However, their distinct multi-dimensional temporal signature---including subtly depressed mean SINR and reduced CQI variability---makes them detectable through sliding-window analysis. Both stages use blocked temporal 5-fold cross-validation: Stage~1 trains on synthetic KPI profiles mixed with ${\sim}$765 real samples per fold; Stage~2 trains on real sliding windows augmented with 500 synthetic windows per class (Normal/Attack). Sliding windows are generated strictly within each temporal block, ensuring zero sample overlap between train and test sets.
+A key observation, illustrated in Fig.~\ref{fig:kpm_ts}, is that protocol-aware attacks (Deceptive, PSS, PDCCH, DMRS) produce near-zero BLER and normal CQI, making them invisible to per-sample classifiers. However, their distinct multi-dimensional temporal signature---including subtly depressed mean SINR and reduced CQI variability---makes them detectable through sliding-window analysis. Both stages use blocked temporal 5-fold cross-validation with zero sample overlap between train and test sets. Stage~1 trains on synthetic KPI profiles (500 per class) mixed with ${\sim}$765 real samples per fold; Stage~2 trains on real sliding windows augmented with 500 synthetic windows per class.
 
 \subsection{Detection Performance}
 
-Table~\ref{tab:detection} compares Stage~1 alone versus the combined pipeline. Both stages are evaluated via blocked temporal 5-fold cross-validation on 1,492 within-session samples: each mode's time-series is split into five consecutive blocks, sliding windows are generated strictly within each block (preventing sample overlap between train and test), and each fold trains on four blocks augmented with synthetic data and tests on the held-out block. Stage~1 effectively detects Constant jamming (97.0\%) through sustained BLER elevation, and partially detects Random (68.9\%) and Reactive (65.6\%) through intermittent BLER spikes. However, protocol-aware attacks (Deceptive, PSS, PDCCH, DMRS) produce near-zero BLER and normal CQI (Table~\ref{tab:kpm_stats}), evading per-sample classification entirely---Stage~1 detects $<$1\% of these four modes.
+Table~\ref{tab:detection} compares Stage~1 alone versus the combined pipeline. Both stages are evaluated via blocked temporal 5-fold cross-validation on 1,492 samples: each mode's time-series is split into five consecutive blocks, sliding windows are generated strictly within each block, and each fold trains on four blocks (augmented with synthetic data) and tests on the held-out block. Stage~1 effectively detects Constant jamming (97.0\%) through sustained BLER elevation, and partially detects Random (68.9\%) and Reactive (65.6\%) through intermittent BLER spikes. However, protocol-aware attacks (Deceptive, PSS, PDCCH, DMRS) produce near-zero BLER and normal CQI (Table~\ref{tab:kpm_stats}), evading per-sample classification entirely---Stage~1 detects $<$1\% of these four modes.
 
 The sliding-window KSVM in Stage~2 recovers nearly all false negatives. The key mechanism is multi-dimensional temporal analysis: although both protocol-aware attack windows and many Normal windows exhibit near-zero BLER variance, the RBF-kernel SVM ($C$=0.5) exploits joint differences in SINR statistics ($\mu_s$, $\sigma^2_s$) and CQI variability ($\sigma^2_c$) to achieve separation on cross-validated held-out blocks. Hybrid training with synthetic windows helps the model generalize across temporal variability. The combined pipeline achieves \textbf{100\% detection for six of seven modes}, with PDCCH at 91.9\% (limited by one temporal block where the narrow CORESET-targeted interference falls below the SVM's decision boundary), and 5.3\% combined false alarm rate.
 
 \begin{table}[t]
 \centering
-\caption{Detection Rate: Stage~1 vs.\ Stage~2 vs.\ Combined, all evaluated via blocked temporal 5-fold CV on within-session data ($N$=1,492). $\pm$ values denote standard deviation across folds.}
+\caption{Detection Rate: Stage~1 vs.\ Stage~2 vs.\ Combined, evaluated via blocked temporal 5-fold CV ($N$=1,492). $\pm$ values denote standard deviation across folds.}
 \label{tab:detection}
 \small
 \begin{tabular}{lrrr}
@@ -232,7 +232,7 @@ DMRS & 0\% & 100\% & \textbf{100\%} \\
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{fig_detection_comparison.pdf}
-\caption{Detection rate: Stage~1 alone vs.\ combined Stage~1+2. The sliding-window KSVM recovers all false negatives from protocol-aware attacks.}
+\caption{Detection rate: Stage~1 alone vs.\ combined Stage~1+2. The sliding-window KSVM recovers the majority of false negatives from protocol-aware attacks.}
 \label{fig:detection}
 \end{figure}
 

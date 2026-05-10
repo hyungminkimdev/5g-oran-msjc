@@ -35,7 +35,7 @@ plt.rcParams.update({
     'legend.fontsize': 8,
 })
 
-CSV_PATH = os.path.join(os.path.dirname(__file__), '..', 'kpm_fdd_alldata.csv')
+CSV_PATH = os.path.join(os.path.dirname(__file__), '..', 'kpm_fdd_session2.csv')
 EVAL_RESULTS_PATH = os.path.join(os.path.dirname(__file__), '..', 'eval_results.json')
 LATENCY_LOG_PATH = os.path.join(os.path.dirname(__file__), '..', 'latency_log.csv')
 IQ_DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'iq_data')
