@@ -209,7 +209,7 @@ Model files (`.pth`, `.pkl`) are also gitignored. Retrain with commands above.
 
 | Mode | Stage 1 | Stage 2 | Combined |
 |------|---------|---------|----------|
-| Normal (FA) | 1.3% | 0% | **1.3%** |
+| Normal (FA) | 1.25% | 0% | **1.25%** |
 | Constant | 100% | 100% | **100%** |
 | Random | 66.4% | 100% | **100%** |
 | Reactive | 63.0% | 100% | **100%** |
@@ -220,12 +220,13 @@ Model files (`.pth`, `.pkl`) are also gitignored. Retrain with commands above.
 
 ### Latency
 
-| Path | Latency |
-|------|---------|
-| CLEAN (S1→S2) | 1–4 ms |
-| ATTACK_CONFIRMED (S1) | 1–2 ms |
-| PROTOCOL_AWARE (S1→S3) | 40–73 ms |
-| Near-RT RIC Budget | **≤ 100 ms** ✅ |
+| Path | Stages | Latency (p5–p95) |
+|------|--------|-----------------|
+| CLEAN | S1→S2 | 0.2–3.0 ms |
+| ATTACK_CONFIRMED | S1 | < 0.5 ms |
+| FN_CAUGHT | S1→S2→S3 | 8.8–22.5 ms |
+| PROTOCOL_AWARE | S1→S3 | 8.2–20.7 ms |
+| Near-RT RIC Budget | — | **≤ 100 ms** |
 
 ## References
 

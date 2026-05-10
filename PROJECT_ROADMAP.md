@@ -1,6 +1,6 @@
 # MSJC 프로젝트 전체 로드맵 (Phase 1~7)
 
-> 최종 업데이트: 2026-05-08
+> 최종 업데이트: 2026-05-10
 > 프로젝트: Multi-Stage Jamming Classification for 5G O-RAN (석사 논문)
 > 타깃: IEEE MILCOM
 
@@ -114,7 +114,7 @@
 | 7.3 | Rahman et al. 대비 차별점 | ✅ | Table IV 포함 |
 | 7.4 | 스펙트로그램 시각화 | ✅ | `fig_spectrograms.pdf` |
 | 7.5 | Latency CDF Figure | ✅ | `fig_latency_cdf.pdf` |
-| 7.6 | 실측 Cross-validation | ✅ | `tools/eval_real_crossval.py`, 100% detection, FA 1.3% |
+| 7.6 | 실측 Cross-validation | ✅ | `tools/eval_real_crossval.py`, 100% detection, FA 1.25% |
 | 7.7 | 논문 초안 작성 | ✅ | `paper/main.tex` — IEEE MILCOM 형식, 공저자 추가 |
 | 7.8 | README + 재현성 패키지 | ✅ | GitHub repo 정리, 최신 결과 반영 |
 | 7.9 | 지도교수 리뷰 + 수정 | 📋 예정 | |
@@ -143,8 +143,8 @@
 | 지표 | 값 |
 |------|-----|
 | S1+S2 탐지율 | 전 7모드 **100%** (held-out real data) |
-| False Alarm | **1.3%** (cross-validation, N=325 windows) |
-| S3 분류 (실측 I/Q) | PSS 86%, PDCCH 90%, DMRS 76%, Deceptive 100% |
-| Latency | CLEAN 1-4ms, PROTOCOL_AWARE 40-73ms (**≤100ms**) |
-| 데이터 | KPM 1,733개 + I/Q 400개 |
+| False Alarm | **1.25%** (held-out real testbed data) |
+| S3 분류 (실측 I/Q) | PSS 94%, PDCCH 72%, DMRS 84%, Deceptive 90% (**전체 85%**) |
+| Latency | CLEAN 0.2–3ms, ATTACK <0.5ms, FN_CAUGHT 8.8–22.5ms, PROTOCOL_AWARE 8.2–20.7ms (**p95 ≤23ms**) |
+| 데이터 | KPM 1,733개 + I/Q 400개 (실측, CCI xG Testbed) |
 | Closed-loop | xApp→Labeler→TrainMgr→A1→hot-reload 검증 |
