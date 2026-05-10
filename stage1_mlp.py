@@ -250,6 +250,95 @@ def generate_synthetic_dataset(n_per_class: int = 500, real_csv: str = None):
     return np.array(X_list, dtype=np.float32), np.array(y_list, dtype=np.int64)
 
 
+def generate_synthetic_dataset_with_real_split(
+    n_per_class: int = 500,
+    real_csv: str = None,
+    real_indices: list = None,
+):
+    """
+    합성 + 실측 데이터 혼합 (특정 인덱스만 사용).
+    blocked CV에서 train fold의 실측 인덱스만 넘겨 leakage를 방지.
+
+    Args:
+        real_indices: 사용할 CSV 행 인덱스 리스트 (None이면 전체)
+    Returns: X (N×8 float32), y (N, int64)
+    """
+    X_list, y_list = [], []
+
+    # 합성 데이터
+    for label in LABELS:
+        for _ in range(n_per_class):
+            feat = simulate_kpi_chunk(label)
+            X_list.append(feat)
+            y_list.append(LABEL_IDX[label])
+
+    # 실측 데이터 (지정 인덱스만)
+    if real_csv and os.path.exists(real_csv):
+        import csv as _csv
+        from kpi_feature_extractor import csv_row_to_features, _LABEL_TO_STAGE1
+        with open(real_csv) as f:
+            rows = list(_csv.DictReader(f))
+
+        indices = real_indices if real_indices is not None else range(len(rows))
+        added, skipped = 0, 0
+        for i in indices:
+            row = rows[i]
+            raw_label = row["label"]
+            lbl = _LABEL_TO_STAGE1.get(raw_label, raw_label)
+            if lbl not in LABEL_IDX:
+                continue
+            feat = csv_row_to_features(row)
+            if lbl == "Normal":
+                X_list.append(feat)
+                y_list.append(LABEL_IDX[lbl])
+                added += 1
+            else:
+                sinr, bler, cqi = feat[2], feat[3], feat[6]
+                if bler > 0.03 or sinr < 3.0 or cqi < 48:
+                    X_list.append(feat)
+                    y_list.append(LABEL_IDX[lbl])
+                    added += 1
+                else:
+                    skipped += 1
+        print(f"[Stage1 MLP] 실측 {added}개 혼합, {skipped}개 스킵 (indices {len(list(indices))}개 중)")
+
+    return np.array(X_list, dtype=np.float32), np.array(y_list, dtype=np.int64)
+
+
+def train_model_from_data(X: np.ndarray, y: np.ndarray,
+                          epochs: int = 50, lr: float = 0.001):
+    """
+    주어진 데이터로 MLP 학습 (저장 안 함, 메모리 반환).
+    blocked CV 내부에서 사용.
+
+    Returns: (model, scaler, device)
+    """
+    from sklearn.preprocessing import StandardScaler
+
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X).astype(np.float32)
+
+    dataset = TensorDataset(torch.from_numpy(X_scaled), torch.from_numpy(y))
+    loader  = DataLoader(dataset, batch_size=64, shuffle=True, drop_last=True)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model  = JammingMLP().to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.CrossEntropyLoss()
+
+    model.train()
+    for epoch in range(epochs):
+        for bx, by in loader:
+            bx, by = bx.to(device), by.to(device)
+            optimizer.zero_grad()
+            loss = criterion(model(bx), by)
+            loss.backward()
+            optimizer.step()
+
+    model.eval()
+    return model, scaler, device
+
+
 # ─────────────────────────────────────────────
 # 4. 학습
 # ─────────────────────────────────────────────

@@ -1,61 +1,126 @@
 {
-  "total_samples": 1732,
+  "total_samples": 1733,
+  "eval_method": "blocked_temporal_cv",
   "modes": {
     "Normal": {
       "n_samples": 798,
-      "s1_fa_rate": 1.25,
+      "s1_fa_rate": 3.01,
+      "s1_fa_std": 3.56,
       "s2_fa_rate": 4.21,
       "s2_holdout_fa_rate": 0.0,
-      "combined_fa_rate": 1.25
+      "combined_fa_rate": 3.01,
+      "s1_per_fold": [
+        1.89,
+        2.52,
+        0.0,
+        0.63,
+        9.88
+      ]
     },
     "Constant": {
       "n_samples": 220,
-      "s1_det_rate": 100.0,
+      "s1_det_rate": 98.64,
+      "s1_det_std": 2.73,
       "s2_det_rate": 100.0,
       "s2_holdout_det_rate": 100.0,
-      "combined_det_rate": 100.0
+      "combined_det_rate": 100.0,
+      "s1_per_fold": [
+        100.0,
+        100.0,
+        100.0,
+        93.18,
+        100.0
+      ]
     },
     "Random": {
       "n_samples": 119,
-      "s1_det_rate": 66.39,
+      "s1_det_rate": 68.07,
+      "s1_det_std": 7.45,
       "s2_det_rate": 100.0,
       "s2_holdout_det_rate": 100.0,
-      "combined_det_rate": 100.0
+      "combined_det_rate": 100.0,
+      "s1_per_fold": [
+        56.52,
+        65.22,
+        73.91,
+        65.22,
+        77.78
+      ]
     },
     "Reactive": {
       "n_samples": 119,
-      "s1_det_rate": 63.03,
+      "s1_det_rate": 64.71,
+      "s1_det_std": 5.84,
       "s2_det_rate": 100.0,
       "s2_holdout_det_rate": 100.0,
-      "combined_det_rate": 100.0
+      "combined_det_rate": 100.0,
+      "s1_per_fold": [
+        60.87,
+        65.22,
+        56.52,
+        73.91,
+        66.67
+      ]
     },
     "Deceptive": {
       "n_samples": 119,
-      "s1_det_rate": 0.0,
+      "s1_det_rate": 0.84,
+      "s1_det_std": 1.74,
       "s2_det_rate": 100.0,
       "s2_holdout_det_rate": 100.0,
-      "combined_det_rate": 100.0
+      "combined_det_rate": 100.0,
+      "s1_per_fold": [
+        0.0,
+        4.35,
+        0.0,
+        0.0,
+        0.0
+      ]
     },
     "PSS": {
       "n_samples": 119,
       "s1_det_rate": 0.0,
+      "s1_det_std": 0.0,
       "s2_det_rate": 100.0,
       "s2_holdout_det_rate": 100.0,
-      "combined_det_rate": 100.0
+      "combined_det_rate": 100.0,
+      "s1_per_fold": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
     },
     "PDCCH": {
       "n_samples": 119,
       "s1_det_rate": 0.0,
+      "s1_det_std": 0.0,
       "s2_det_rate": 100.0,
       "s2_holdout_det_rate": 100.0,
-      "combined_det_rate": 100.0
+      "combined_det_rate": 100.0,
+      "s1_per_fold": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
     },
     "DMRS": {
       "n_samples": 119,
       "s1_det_rate": 0.0,
+      "s1_det_std": 0.0,
       "s2_det_rate": 100.0,
       "s2_holdout_det_rate": 100.0,
-      "combined_det_rate": 100.0
+      "combined_det_rate": 100.0,
+      "s1_per_fold": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
     }
   }
 }
