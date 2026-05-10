@@ -437,216 +437,54 @@ def eval_stage2_holdout(csv_path: str, window_size: int = WINDOW_SIZE, train_rat
     return pipeline, s2_holdout
 
 
-def eval_stage2_blocked_cv(csv_path: str, n_folds: int = 5,
-                           window_size: int = WINDOW_SIZE,
-                           n_synth_per_class: int = 500):
-    """
-    Stage 2 KSVM — Blocked Temporal K-Fold Cross-Validation.
-
-    각 모드의 시계열을 k개 연속 블록으로 분할 후,
-    매 fold마다 1블록을 테스트, 나머지 k-1블록 + 합성 window로 SVM 학습.
-
-    합성 window 혼합 이유:
-      실측 Normal 데이터의 temporal non-stationarity로 인해
-      특정 블록이 학습 분포에서 벗어남. 합성 데이터가 넓은 Normal 분포를
-      커버하여 일반화 성능을 향상시킴 (Stage 1과 동일한 hybrid 전략).
-
-    Sliding window는 각 블록 **내부에서만** 생성하여
-    train/test 간 샘플 공유를 완전히 차단한다.
-    """
-    from sklearn.svm import SVC
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.pipeline import Pipeline as SkPipeline
-    from stage2_ksvm import generate_window_dataset
-
-    with open(csv_path) as f:
-        rows = list(csv.DictReader(f))
-
-    mode_indices = defaultdict(list)
-    for i, r in enumerate(rows):
-        mode_indices[r['label']].append(i)
-
-    all_features = np.array([csv_row_to_features(r) for r in rows], dtype=np.float32)
-
-    W = window_size
-    modes = ["Normal", "Constant", "Random", "Reactive",
-             "Deceptive", "PSS", "PDCCH", "DMRS"]
-
-    print(f"\n{'='*60}")
-    print(f"Stage 2 KSVM — Blocked Temporal {n_folds}-Fold CV")
-    print(f"  합성 window 혼합: {n_synth_per_class}개/class")
-    print(f"  블록 경계 = natural gap (window가 블록을 넘지 않음)")
-    print(f"{'='*60}")
-
-    all_fold_results = []
-
-    for fold in range(n_folds):
-        X_train_real, y_train_real = [], []
-        X_test, y_test = [], []
-        test_mode_map = []
-
-        for mode in modes:
-            indices = mode_indices.get(mode, [])
-            n = len(indices)
-            if n < W:
-                continue
-            is_attack = 0 if mode == "Normal" else 1
-
-            block_size = n // n_folds
-            block_ranges = []
-            for b in range(n_folds):
-                b_start = b * block_size
-                b_end = b_start + block_size if b < n_folds - 1 else n
-                block_ranges.append((b_start, b_end))
-
-            for b in range(n_folds):
-                b_start, b_end = block_ranges[b]
-                if b_end - b_start < W:
-                    continue
-
-                for s in range(b_start, b_end - W + 1):
-                    win = all_features[indices[s:s + W]]
-                    feat = extract_window_features(win)
-
-                    if b == fold:
-                        X_test.append(feat)
-                        y_test.append(is_attack)
-                        test_mode_map.append(mode)
-                    else:
-                        X_train_real.append(feat)
-                        y_train_real.append(is_attack)
-
-        # 합성 window 생성 + 실측 train 혼합
-        X_synth, y_synth = generate_window_dataset(n_synth_per_class, W)
-
-        X_train = np.concatenate([
-            np.array(X_train_real, dtype=np.float32),
-            X_synth,
-        ])
-        y_train = np.concatenate([
-            np.array(y_train_real, dtype=np.int32),
-            y_synth,
-        ])
-
-        X_test = np.array(X_test, dtype=np.float32)
-        y_test = np.array(y_test, dtype=np.int32)
-
-        if len(X_train) == 0 or len(X_test) == 0:
-            print(f"  Fold {fold+1}: SKIP")
-            continue
-
-        pipeline = SkPipeline([
-            ("scaler", StandardScaler()),
-            ("svm", SVC(kernel="rbf", C=0.5, gamma="scale",
-                        probability=True, random_state=42)),
-        ])
-        pipeline.fit(X_train, y_train)
-        preds = pipeline.predict(X_test)
-
-        fold_result = {}
-        test_mode_arr = np.array(test_mode_map)
-        for mode in modes:
-            mask = test_mode_arr == mode
-            if mask.sum() == 0:
-                continue
-            mode_preds = preds[mask]
-            if mode == "Normal":
-                fa = float((mode_preds == 1).mean())
-                fold_result[mode] = {"fa_rate": fa, "n": int(mask.sum())}
-            else:
-                det = float((mode_preds == 1).mean())
-                fold_result[mode] = {"det_rate": det, "n": int(mask.sum())}
-
-        all_fold_results.append(fold_result)
-        n_real = len(X_train_real)
-        n_correct = int((preds == y_test).sum())
-        print(f"  Fold {fold+1}: train={len(X_train)}(real={n_real}+synth={len(X_synth)}), "
-              f"test={len(X_test)}, acc={n_correct/len(X_test):.4f}")
-
-    # 전체 결과 집계
-    print(f"\n{'='*60}")
-    print(f"Stage 2 KSVM — Blocked {n_folds}-Fold CV 결과 (weighted avg)")
-    print(f"{'='*60}")
-
-    s2_results = {}
-    for mode in modes:
-        fold_vals, fold_ns = [], []
-        for fr in all_fold_results:
-            if mode in fr:
-                key = "fa_rate" if mode == "Normal" else "det_rate"
-                fold_vals.append(fr[mode][key])
-                fold_ns.append(fr[mode]["n"])
-
-        if not fold_vals:
-            continue
-
-        total_n = sum(fold_ns)
-        weighted_avg = sum(v * n for v, n in zip(fold_vals, fold_ns)) / total_n
-        fold_std = float(np.std(fold_vals))
-
-        if mode == "Normal":
-            s2_results[mode] = {"fa_rate": weighted_avg, "n": total_n,
-                                "fa_std": fold_std, "per_fold": fold_vals}
-            print(f"  Normal FA:     {weighted_avg:.4f} ± {fold_std:.4f} "
-                  f"(N={total_n}, folds={[f'{v:.4f}' for v in fold_vals]})")
-        else:
-            s2_results[mode] = {"det_rate": weighted_avg, "n": total_n,
-                                "det_std": fold_std, "per_fold": fold_vals}
-            print(f"  {mode:<12s}:  {weighted_avg:.4f} ± {fold_std:.4f} "
-                  f"(N={total_n}, folds={[f'{v:.4f}' for v in fold_vals]})")
-
-    return s2_results
-
-
-def save_results(s1_results, s2_blocked, total_samples):
+def save_results(s1_results, s2_results, s2_holdout, total_samples):
     """모든 evaluation 결과를 JSON으로 저장"""
     modes = ["Normal", "Constant", "Random", "Reactive",
              "Deceptive", "PSS", "PDCCH", "DMRS"]
 
     results = {
         "total_samples": total_samples,
-        "eval_method": "blocked_temporal_5fold_cv",
+        "eval_method": "blocked_temporal_cv",
         "modes": {},
     }
 
     for mode in modes:
         s1 = s1_results.get(mode, {})
-        s2 = s2_blocked.get(mode, {})
+        s2 = s2_results.get(mode, {})
+        s2h = s2_holdout.get(mode, {})
 
         entry = {"n_samples": s1.get("n", 0)}
 
         if mode == "Normal":
             s1_fa = s1.get("fa_rate", 0)
             s1_std = s1.get("fa_std", 0)
-            s2_fa = s2.get("fa_rate", 0)
-            s2_std = s2.get("fa_std", 0)
-            combined_fa = s1_fa + (1 - s1_fa) * s2_fa
+            s2_fa = s2.get("det_rate", 0)
+            s2h_fa = s2h.get("fa_rate", 0)
+            combined_fa = s1_fa + (1 - s1_fa) * s2h_fa
             entry["s1_fa_rate"] = round(s1_fa * 100, 2)
             entry["s1_fa_std"] = round(s1_std * 100, 2)
-            entry["s2_blocked_fa_rate"] = round(s2_fa * 100, 2)
-            entry["s2_fa_std"] = round(s2_std * 100, 2)
+            entry["s2_fa_rate"] = round(s2_fa * 100, 2)
+            entry["s2_holdout_fa_rate"] = round(s2h_fa * 100, 2)
             entry["combined_fa_rate"] = round(combined_fa * 100, 2)
             if "per_fold" in s1:
                 entry["s1_per_fold"] = [round(v * 100, 2) for v in s1["per_fold"]]
-            if "per_fold" in s2:
-                entry["s2_per_fold"] = [round(v * 100, 2) for v in s2["per_fold"]]
         else:
             s1_det = s1.get("det_rate", 0)
             s1_std = s1.get("det_std", 0)
             s2_det = s2.get("det_rate", 0)
-            s2_std = s2.get("det_std", 0)
-            combined_det = s1_det + (1 - s1_det) * s2_det
+            s2h_det = s2h.get("det_rate", 0)
+            combined_det = s1_det + (1 - s1_det) * s2h_det
             entry["s1_det_rate"] = round(s1_det * 100, 2)
             entry["s1_det_std"] = round(s1_std * 100, 2)
-            entry["s2_blocked_det_rate"] = round(s2_det * 100, 2)
-            entry["s2_det_std"] = round(s2_std * 100, 2)
+            entry["s2_det_rate"] = round(s2_det * 100, 2)
+            entry["s2_holdout_det_rate"] = round(s2h_det * 100, 2)
             entry["combined_det_rate"] = round(combined_det * 100, 2)
             if "per_fold" in s1:
                 entry["s1_per_fold"] = [round(v * 100, 2) for v in s1["per_fold"]]
-            if "per_fold" in s2:
-                entry["s2_per_fold"] = [round(v * 100, 2) for v in s2["per_fold"]]
 
-        entry["s2_n_windows"] = s2.get("n", 0)
+        if mode in s2:
+            entry["s2_n_windows"] = s2.get("n_windows", 0)
+
         results["modes"][mode] = entry
 
     with open(RESULTS_PATH, "w") as f:
@@ -660,45 +498,52 @@ if __name__ == "__main__":
 
     print(f"실측 데이터: {csv_path}")
 
-    # ── Stage 1: Blocked Temporal 5-Fold CV ──
+    # ── Stage 1: Blocked Temporal 5-Fold CV (leakage 없는 평가) ──
     s1_results = eval_stage1_blocked_cv(csv_path, n_folds=5,
                                          n_per_class=500, epochs=50)
 
-    # ── Stage 1: 기존 모델 참고용 ──
+    # ── Stage 1: 기존 모델 참고용 (비교 목적) ──
     X, y_raw, s1_preds, s1_old = eval_stage1_real(csv_path)
 
-    # ── Stage 2: Blocked Temporal 5-Fold CV (gap=W-1) ──
-    s2_blocked = eval_stage2_blocked_cv(csv_path, n_folds=5)
+    # ── Stage 2 평가 1: 현재 모델로 전체 데이터 평가 ──
+    from stage2_ksvm import load_model
+    s2_pipeline = load_model()
+    s2_results = eval_stage2_real(csv_path, s2_pipeline)
 
-    # ── Combined 평가 ──
+    # ── Stage 2 평가 2: Hold-out 평가 (80/20 split) ──
+    s2_holdout_pipeline, s2_holdout = eval_stage2_holdout(csv_path)
+
+    # ── Combined 평가 (blocked CV S1 + hold-out S2) ──
     print("\n" + "=" * 60)
     print("Combined Stage 1+2 Detection Rate")
-    print("  S1: Blocked 5-Fold CV | S2: Blocked 5-Fold CV (gap=14)")
+    print("  S1: Blocked Temporal 5-Fold CV | S2: Hold-Out 80/20")
     print("=" * 60)
     modes = ["Normal", "Constant", "Random", "Reactive",
              "Deceptive", "PSS", "PDCCH", "DMRS"]
     for mode in modes:
         s1 = s1_results.get(mode, {})
-        s2 = s2_blocked.get(mode, {})
+        s2 = s2_holdout.get(mode, {})
         if mode == "Normal":
             s1_fa = s1.get("fa_rate", 0)
             s1_std = s1.get("fa_std", 0)
             s2_fa = s2.get("fa_rate", 0)
-            s2_std = s2.get("fa_std", 0)
             combined_fa = s1_fa + (1 - s1_fa) * s2_fa
             print(f"  Normal FA: S1={s1_fa:.4f}±{s1_std:.4f}, "
-                  f"S2={s2_fa:.4f}±{s2_std:.4f}, Combined≈{combined_fa:.4f}")
+                  f"S2(holdout)={s2_fa:.4f}, Combined≈{combined_fa:.4f}")
         else:
             s1_det = s1.get("det_rate", 0)
             s1_std = s1.get("det_std", 0)
             s2_det = s2.get("det_rate", 0)
-            s2_std = s2.get("det_std", 0)
             combined_det = s1_det + (1 - s1_det) * s2_det
             n = s1.get("n", "?")
             print(f"  {mode:<12s}: S1={s1_det:.4f}±{s1_std:.4f}, "
-                  f"S2={s2_det:.4f}±{s2_std:.4f}, Combined≈{combined_det:.4f} (N={n})")
+                  f"S2(holdout)={s2_det:.4f}, Combined≈{combined_det:.4f} (N={n})")
 
     # JSON으로 결과 저장
+    total_samples = sum(len(mode_indices[m])
+                        for m in modes
+                        if (mode_indices := defaultdict(list)) or True)
+    # 총 샘플 수 직접 계산
     with open(csv_path) as f:
         total_samples = sum(1 for _ in csv.DictReader(f))
-    save_results(s1_results, s2_blocked, total_samples)
+    save_results(s1_results, s2_results, s2_holdout, total_samples)
