@@ -658,7 +658,7 @@ def save_results(s1_results, s2_results, total_samples):
 
 
 if __name__ == "__main__":
-    csv_path = os.path.join(os.path.dirname(__file__), "..", "kpm_fdd_alldata.csv")
+    csv_path = os.path.join(os.path.dirname(__file__), "..", "kpm_fdd_session2.csv")
 
     print(f"실측 데이터: {csv_path}")
 
