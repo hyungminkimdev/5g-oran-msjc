@@ -233,7 +233,7 @@ def train_and_save(n_per_class: int = 500, window_size: int = WINDOW_SIZE,
 
     pipeline = Pipeline([
         ("scaler", StandardScaler()),
-        ("svm",    SVC(kernel="rbf", C=10.0, gamma="scale",
+        ("svm",    SVC(kernel="rbf", C=0.5, gamma="scale",
                        probability=True, random_state=42)),
     ])
 

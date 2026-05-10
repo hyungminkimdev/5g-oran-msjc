@@ -4,20 +4,20 @@
   "modes": {
     "Normal": {
       "n_samples": 798,
-      "s1_fa_rate": 2.63,
-      "s1_fa_std": 3.1,
-      "s2_blocked_fa_rate": 10.85,
-      "s2_fa_std": 18.54,
-      "combined_fa_rate": 13.2,
+      "s1_fa_rate": 2.51,
+      "s1_fa_std": 2.89,
+      "s2_fa_rate": 10.71,
+      "s2_fa_std": 18.27,
+      "combined_fa_rate": 12.95,
       "s1_per_fold": [
-        1.89,
-        1.89,
+        1.26,
+        2.52,
         0.0,
         0.63,
-        8.64
+        8.02
       ],
       "s2_per_fold": [
-        47.59,
+        46.9,
         0.0,
         0.0,
         0.0,
@@ -27,16 +27,16 @@
     },
     "Constant": {
       "n_samples": 220,
-      "s1_det_rate": 96.36,
-      "s1_det_std": 7.27,
-      "s2_blocked_det_rate": 100.0,
+      "s1_det_rate": 97.27,
+      "s1_det_std": 5.45,
+      "s2_det_rate": 100.0,
       "s2_det_std": 0.0,
       "combined_det_rate": 100.0,
       "s1_per_fold": [
         100.0,
         100.0,
         100.0,
-        81.82,
+        86.36,
         100.0
       ],
       "s2_per_fold": [
@@ -52,7 +52,7 @@
       "n_samples": 119,
       "s1_det_rate": 67.23,
       "s1_det_std": 7.93,
-      "s2_blocked_det_rate": 100.0,
+      "s2_det_rate": 100.0,
       "s2_det_std": 0.0,
       "combined_det_rate": 100.0,
       "s1_per_fold": [
@@ -73,14 +73,14 @@
     },
     "Reactive": {
       "n_samples": 119,
-      "s1_det_rate": 63.87,
-      "s1_det_std": 5.77,
-      "s2_blocked_det_rate": 100.0,
+      "s1_det_rate": 64.71,
+      "s1_det_std": 6.21,
+      "s2_det_rate": 100.0,
       "s2_det_std": 0.0,
       "combined_det_rate": 100.0,
       "s1_per_fold": [
         60.87,
-        65.22,
+        69.57,
         56.52,
         73.91,
         62.96
@@ -96,14 +96,14 @@
     },
     "Deceptive": {
       "n_samples": 119,
-      "s1_det_rate": 0.0,
-      "s1_det_std": 0.0,
-      "s2_blocked_det_rate": 100.0,
+      "s1_det_rate": 0.84,
+      "s1_det_std": 1.74,
+      "s2_det_rate": 100.0,
       "s2_det_std": 0.0,
       "combined_det_rate": 100.0,
       "s1_per_fold": [
         0.0,
-        0.0,
+        4.35,
         0.0,
         0.0,
         0.0
@@ -121,7 +121,7 @@
       "n_samples": 119,
       "s1_det_rate": 0.0,
       "s1_det_std": 0.0,
-      "s2_blocked_det_rate": 95.92,
+      "s2_det_rate": 95.92,
       "s2_det_std": 8.89,
       "combined_det_rate": 95.92,
       "s1_per_fold": [
@@ -144,7 +144,7 @@
       "n_samples": 119,
       "s1_det_rate": 0.0,
       "s1_det_std": 0.0,
-      "s2_blocked_det_rate": 75.51,
+      "s2_det_rate": 75.51,
       "s2_det_std": 36.92,
       "combined_det_rate": 75.51,
       "s1_per_fold": [
@@ -167,7 +167,7 @@
       "n_samples": 119,
       "s1_det_rate": 0.0,
       "s1_det_std": 0.0,
-      "s2_blocked_det_rate": 95.92,
+      "s2_det_rate": 95.92,
       "s2_det_std": 8.89,
       "combined_det_rate": 95.92,
       "s1_per_fold": [
