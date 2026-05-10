@@ -36,7 +36,7 @@ Jamming attacks pose a critical threat to 5G networks, yet most existing detecti
 \section{Introduction}
 \label{sec:intro}
 
-The Open Radio Access Network (O-RAN) architecture disaggregates the traditional RAN into programmable, multi-vendor components controlled by RAN Intelligent Controllers (RICs)~\cite{polese2023, abdalla2022}. While this openness enables innovation through xApps and rApps~\cite{santos2025, hoffmann2024}, it also expands the attack surface, making 5G networks increasingly vulnerable to sophisticated RF jamming~\cite{pirayesh2022, harvanek2024}.
+The Open Radio Access Network (O-RAN) architecture disaggregates the traditional RAN into programmable, multi-vendor components controlled by RAN Intelligent Controllers (RICs)~\cite{polese2023, abdalla2022}. While this openness enables innovation through xApps and rApps~\cite{santos2025, hoffmann2024}, it also expands the attack surface, making 5G networks increasingly vulnerable to sophisticated RF jamming~\cite{pirayesh2022, harvanek2024}. This threat is particularly acute for tactical and military 5G deployments operating in contested RF environments, where adversaries may employ protocol-aware electronic warfare (EW) techniques.
 
 Modern jamming attacks against 5G New Radio (NR) extend well beyond simple broadband noise. Protocol-aware jammers can selectively target synchronization signals (PSS/SSS), control channels (PDCCH), or reference signals (DMRS), each producing distinct spectral signatures but minimal impact on aggregate KPI metrics~\cite{savadatti2024, shahid2024}. Detecting and classifying these diverse attack types in real time is essential for effective mitigation.
 
@@ -88,7 +88,14 @@ All experiments are conducted on the CCI~xG Testbed~\cite{dasilva2025}, an O-RAN
     \item \textbf{Instance-3 (Jammer):} A custom 7-mode jammer generating protocol-aware RF interference, with OFDM structure matched to the gNB (FFT=1536, CP=108).
 \end{itemize}
 
-Each instance is equipped with an Ettus USRP X310 SDR connected via 10G Ethernet (MTU~9000). The gNB reports per-UE KPI metrics via E2SM-KPM at 1-second intervals.
+Each instance is equipped with an Ettus USRP X310 SDR connected via 10G Ethernet (MTU~9000). The gNB reports per-UE KPI metrics via E2SM-KPM at 1-second intervals. Fig.~\ref{fig:arch} shows the overall system architecture.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_architecture.pdf}
+\caption{MSJC testbed architecture on the CCI~xG Testbed. The MSJC xApp runs on the FlexRIC Near-RT RIC, receiving E2SM-KPM telemetry from the gNB. Non-RT RIC rApps automate labeling and retraining via the A1 interface.}
+\label{fig:arch}
+\end{figure}
 
 \subsection{Jammer Design}
 
@@ -113,6 +120,15 @@ The xApp implements a three-stage cascade optimized for the Near-RT RIC's 100\,m
 \textbf{Stage~2 (KSVM):} Re-examines Normal verdicts using a sliding window of $W=15$ samples (15~seconds). Twelve statistical features capture temporal patterns invisible to per-sample analysis. An RBF-kernel SVM decides Normal vs.\ Attack in 3--4\,ms.
 
 \textbf{Stage~3 (MobileNetV3):} Invoked only for Deceptive detections or Stage~2 false-negative catches. Raw I/Q snapshots (16,384 complex samples via passive USRP reception) are converted to 224$\times$224 spectrograms~\cite{reusmuns2024} and classified into PSS/SSS, PDCCH, DMRS, or Generic Deceptive in 40--50\,ms.
+
+\noindent Fig.~\ref{fig:pipeline} illustrates the complete classification cascade and decision flow.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_pipeline.pdf}
+\caption{MSJC three-stage classification cascade. Stage~1 classifies per-sample KPIs; Stage~2 re-examines Normal verdicts via sliding-window statistics; Stage~3 performs protocol-aware I/Q spectrogram classification. All paths complete within 23\,ms (p95).}
+\label{fig:pipeline}
+\end{figure}
 
 \subsection{Closed-Loop MLOps}
 
@@ -263,7 +279,7 @@ Stage~3 MobileNetV3, fine-tuned with real I/Q captures from the testbed, achieve
 
 \subsection{Latency Analysis}
 
-Table~\ref{tab:latency} shows all classification paths remain well within the Near-RT RIC's 100\,ms budget, with the fastest path (ATTACK\_CONFIRMED) completing in under 1\,ms and the heaviest path (FN\_CAUGHT, requiring all three stages) at $\leq$23\,ms (p95).
+Table~\ref{tab:latency} shows all classification paths remain well within the Near-RT RIC's 100\,ms budget, with the fastest path (ATTACK\_CONFIRMED) completing in under 1\,ms and the heaviest path (FN\_CAUGHT, requiring all three stages) at $\leq$23\,ms (p95). This represents a 7.8$\times$ improvement over Jere et al.'s 180\,ms detection delay~\cite{jere2024}, enabled by the lightweight cascade design that avoids invoking Stage~3 for most samples.
 
 \begin{table}[t]
 \centering
