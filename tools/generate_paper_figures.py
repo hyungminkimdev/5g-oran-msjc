@@ -76,11 +76,22 @@ def fig_kpm_timeseries():
     modes_order = ['Normal', 'Constant', 'Random', 'Reactive']
     colors = {'Normal': '#2196F3', 'Constant': '#D32F2F', 'Random': '#F57C00', 'Reactive': '#7B1FA2'}
 
+    # Normal: BLER spike가 포함된 구간 선택 (sample 80~140 부근에 spike 존재)
+    # 다른 모드: 앞 60개
+    SLICE = {
+        'Normal':   (80, 140),   # BLER spike 포함 구간
+        'Constant': (0, 60),
+        'Random':   (0, 60),
+        'Reactive': (0, 60),
+    }
+
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 2.8), sharex=True)
 
     x_offset = 0
     for mode in modes_order:
-        mode_rows = [r for r in rows if r['label'] == mode][:60]
+        all_mode = [r for r in rows if r['label'] == mode]
+        s, e = SLICE[mode]
+        mode_rows = all_mode[s:e]
         valid = [r for r in mode_rows if r.get('cqi', '') not in ('', '')]
         if not valid:
             continue
