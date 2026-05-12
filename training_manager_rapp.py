@@ -192,7 +192,7 @@ class TrainingManagerRApp:
                 task_type=Task.TaskTypes.training,
             )
             task.set_parameter("triggered_by", "training_manager_rapp")
-            task.set_parameter("data_source", "kpm_fdd_alldata.csv")
+            task.set_parameter("data_source", "kpm_fdd_session2.csv")
             task.set_parameter("n_per_class", 1000)
             task.set_parameter("epochs", 100)
 
@@ -208,7 +208,7 @@ class TrainingManagerRApp:
         """Standalone 재학습: stage1_mlp.py 직접 호출"""
         import subprocess
 
-        csv_path = os.path.join(PROJECT_DIR, "kpm_fdd_alldata.csv")
+        csv_path = os.path.join(PROJECT_DIR, "kpm_fdd_session2.csv")
         cmd = [
             "python3", os.path.join(PROJECT_DIR, "stage1_mlp.py"),
             "--retrain", "--n-per-class", "1000", "--epochs", "100",
