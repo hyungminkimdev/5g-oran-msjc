@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-UE_IP="10.111.143.165"
+UE_IP="10.111.143.98"
 JAMMER_IP="10.111.143.61"
 
 echo "=== [1/6] Checking Open5GS ==="

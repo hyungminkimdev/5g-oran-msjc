@@ -5,7 +5,7 @@
 # 나머지: gain=5, amp=1.0 (강한 재밍)
 OUTCSV="${1:-/home/ubuntu/5g-oran-msjc/kpm_fdd_alldata.csv}"
 JAMMER_IP="10.111.143.61"
-UE_IP="10.111.143.165"
+UE_IP="10.111.143.98"
 PW="CCI@2025"
 FREQ="1842.5e6"
 DURATION=120

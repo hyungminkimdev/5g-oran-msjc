@@ -31,7 +31,7 @@ network:
         mtu: 9000
 
     instance1_ue:
-      ip: "10.111.143.165"       # ZeroTier network: b92226be69
+      ip: "10.111.143.98"        # ZeroTier (rebuilt 2026-05)
       role: "UE"
       usrp:
         ip: "192.168.114.2"

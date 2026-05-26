@@ -39,7 +39,7 @@ The classifier receives live 5G KPIs via the **E2 interface (E2SM-KPM)** from a 
 
 | Role | Instance | ZeroTier IP | ZeroTier Net ID | USRP IP | USRP Serial |
 |---|---|---|---|---|---|
-| **UE (srsUE)** | Instance-1 | 10.111.143.165 | b92226be69 | 192.168.114.2 | 323DF47 |
+| **UE (srsUE)** | Instance-1 | 10.111.143.98 | (rebuilt 2026-05) | 192.168.114.2 | 323DF47 |
 | **gNB + 5GC + Near-RT RIC** | Instance-2 | 10.111.143.143 | d5cc70b949 | 192.168.116.2 | 323DF42 |
 | **Jammer** | Instance-3 | 10.111.143.61 | e51276b157 | 192.168.115.2 | 323EE55 |
 
@@ -265,7 +265,7 @@ Jammer USRP(Instance-3)의 RF 파라미터는 gNB와 정확히 일치해야 한�
 > **주의:**
 > - gain=5 이상 + amp=1.0 광대역 모드(Constant/Random/Reactive)는 UE 즉시 탈락. 협대역/저duty 모드(PSS/PDCCH/DMRS)만 고출력 사용 가능.
 > - Random jammer: 기존 `time.sleep()` 방식은 deprecated. 반드시 `build_random_frame()` 사용 (frame 단위 연속 전송, USRP underrun 방지).
-> - I/Q 캡처 (원래): Instance-1 UE USRP passive RX (`tools/iq_capture.py`) — Instance-1 USRP 미응답으로 사용 불가
+> - I/Q 캡처 (원래): Instance-1 UE USRP passive RX (`tools/iq_capture.py`) — Instance-1 재구축 완료 (2026-05), USRP 323DF47 정상
 > - I/Q 캡처 (대안): **Instance-3 X310 full-duplex** — Radio#0 TX(재밍) + Radio#1 RX2(캡처) 동시 사용 (`tools/iq_capture_fullduplex.py`)
 
 ### 8.2 E2SM-KPM 데이터 주의사항 (Phase 5 발견)
