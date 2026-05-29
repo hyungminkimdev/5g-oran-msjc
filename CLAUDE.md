@@ -272,13 +272,13 @@ Jammer USRP(Instance-3)의 RF 파라미터는 gNB와 정확히 일치해야 한�
 
 | 항목 | E2SM-KPM (FlexRIC) | gNB stdout (gnb_kpm_parser) | 처리 |
 |---|---|---|---|
-| **CQI** | 실제 CQI (0-15) | accumulator (0-50) | `extract_from_kpm`에서 ≤15이면 ×3.33 자동 보정 |
+| **CQI** | 실제 CQI (0-15) | accumulator (0-50) → `gnb_kpm_parser.sh`에서 /3.33 변환 | 모델은 0-15 표준 스케일로 학습. >15이면 자동 /3.33 변환 |
 | **DRB.UEThpDl** | 0.0 (idle 시) | N/A | 0이면 default(100.0)로 대체 |
 | **RSRP** | PUSCH SNR (dB) | pusch_snr (dB) | 동일 |
 | **PUCCH.SINR** | PUCCH SINR (dB) | pucch_snr (dB) | 동일 |
 | **DL.BLER** | DL BLER (0~1) | dl_bler (0~1) | 동일 |
 
-> **핵심:** E2SM-KPM과 gNB stdout의 CQI 스케일이 다르다. 모델은 accumulator scale(0-50)로 학습되었으므로, E2SM-KPM 입력 시 자동 보정이 필수.
+> **핵심:** 모델은 3GPP 표준 CQI(0-15)로 학습. E2SM-KPM은 이미 0-15. gNB stdout의 accumulator(0-50)는 `gnb_kpm_parser.sh`에서 /3.33 변환 후 출력. `extract_from_kpm`에서 >15이면 자동 변환 (이전 데이터 호환).
 
 ### 8.3 KPM 보고 주기
 

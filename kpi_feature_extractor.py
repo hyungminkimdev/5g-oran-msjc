@@ -116,11 +116,11 @@ def extract_from_kpm(kpm_msg: dict) -> np.ndarray:
             except (ValueError, TypeError):
                 pass
 
-    # E2SM-KPM CQI 보정: srsRAN DU KPM은 평균 CQI(0-15)를 보내지만,
-    # gNB stdout은 accumulator(0-50)를 출력. 모델은 accumulator scale로 학습.
-    # CQI ≤ 15이면 accumulator scale로 변환 (×3.33)
-    if values["cqi_mean"] <= 15.0:
-        values["cqi_mean"] = values["cqi_mean"] * (50.0 / 15.0)
+    # CQI: 3GPP 표준 0-15 스케일 사용. E2SM-KPM은 이미 0-15.
+    # gNB stdout의 cqi_obs (accumulator 0-50)는 gnb_kpm_parser.sh에서 /3.33 변환.
+    # CQI > 15이면 accumulator scale → 표준 스케일로 변환 (이전 데이터 호환)
+    if values["cqi_mean"] > 15.0:
+        values["cqi_mean"] = values["cqi_mean"] * (15.0 / 50.0)
 
     # dl_throughput=0 (idle)이면 default 유지 (모델이 0에 민감)
     if values["dl_throughput_mbps"] < 0.01:
@@ -142,20 +142,20 @@ def extract_from_kpm(kpm_msg: dict) -> np.ndarray:
 #      [3] bler      ← DL.BLER (주요 판별 지표)
 #      [4] uci_nack  ← dl_nok/(dl_ok+dl_nok) 파생
 #      [5] dl_tput   ← DRB.UEThpDl (CSV에 없음, default 근방)
-#      [6] cqi_mean  ← CQI accumulator (Normal=50, NOT 0-15 scale)
+#      [6] cqi_mean  ← CQI (3GPP 표준 0-15 scale)
 #      [7] harq_retx ← BLER과 유사하게 파생
 # ─────────────────────────────────────────────
 _ATTACK_PROFILES = {
-    #                   rsrp(pusch)    rsrq(fixed)    sinr(pucch)  bler         nack         tput(fixed)  cqi(accum)   harq
+    #                   rsrp(pusch)    rsrq(fixed)    sinr(pucch)  bler         nack         tput(fixed)  cqi(0-15)    harq
     # Normal: 자연 변동 포함 (실측: 6/120 BLER spike, 20/120 CQI dip)
-    "Normal":         [(-1, 32),     (-12.5,-11.5), (-1.0,6.0),  (0.0,0.15),  (0.0,0.15),  (95,105),    (38,50),     (0.0,0.15)],
-    "Constant":       [(-5, 31),     (-12.5,-11.5), (-2.5, 2.0), (0.80,1.0),  (0.80,1.0),  (95,105),    (38,50),     (0.80,1.0)],
+    "Normal":         [(-1, 32),     (-12.5,-11.5), (-1.0,6.0),  (0.0,0.15),  (0.0,0.15),  (95,105),    (11.4,15.0), (0.0,0.15)],
+    "Constant":       [(-5, 31),     (-12.5,-11.5), (-2.5, 2.0), (0.80,1.0),  (0.80,1.0),  (95,105),    (11.4,15.0), (0.80,1.0)],
     # Deceptive: 명확한 KPM 열화만 (clean-looking Deceptive은 Stage 2/3 담당)
-    "Deceptive":      [(-1, 32),     (-12.5,-11.5), (-5.0, 3.5), (0.02,0.5),  (0.02,0.5),  (95,105),    (36,49),     (0.02,0.5)],
+    "Deceptive":      [(-1, 32),     (-12.5,-11.5), (-5.0, 3.5), (0.02,0.5),  (0.02,0.5),  (95,105),    (10.8,14.7), (0.02,0.5)],
     # Stage 3 subtypes (backward compat)
-    "PSS/SSS":        [(-1, 32),     (-12.5,-11.5), (-0.5, 6.0), (0.0, 0.05), (0.0, 0.05), (95,105),    (36,50),     (0.0, 0.05)],
-    "PDCCH":          [(-26, 31),    (-12.5,-11.5), (0.5, 5.5),  (0.0, 0.85), (0.0, 0.85), (95,105),    (40,50),     (0.0, 0.85)],
-    "DMRS":           [(-1, 32),     (-12.5,-11.5), (1.0, 6.0),  (0.0, 0.05), (0.0, 0.05), (95,105),    (40,50),     (0.0, 0.05)],
+    "PSS/SSS":        [(-1, 32),     (-12.5,-11.5), (-0.5, 6.0), (0.0, 0.05), (0.0, 0.05), (95,105),    (10.8,15.0), (0.0, 0.05)],
+    "PDCCH":          [(-26, 31),    (-12.5,-11.5), (0.5, 5.5),  (0.0, 0.85), (0.0, 0.85), (95,105),    (12.0,15.0), (0.0, 0.85)],
+    "DMRS":           [(-1, 32),     (-12.5,-11.5), (1.0, 6.0),  (0.0, 0.05), (0.0, 0.05), (95,105),    (12.0,15.0), (0.0, 0.05)],
 }
 # Burst/intermittent attacks: (jammed_profile, clean_profile, jam_probability)
 _BURST_PROFILES = {
@@ -163,11 +163,11 @@ _BURST_PROFILES = {
     "Reactive": ("Reactive_jam", "Reactive_clean",  0.60),   # 실측: 66% BLER>0
 }
 # Random: duty 30% → BLER 0~1.0, mean=0.33 (실측)
-_ATTACK_PROFILES["Random_jam"]    = [(-1, 32),    (-12.5,-11.5), (-1.0, 6.0), (0.10,1.0),  (0.10,1.0),  (95,105),   (38,50),     (0.10,1.0)]
-_ATTACK_PROFILES["Random_clean"]  = [(-1, 32),    (-12.5,-11.5), (0.0, 6.0),  (0.0,0.05),  (0.0,0.05),  (95,105),   (40,50),     (0.0,0.05)]
-# Reactive: duty 40% → BLER 0~1.0, mean=0.28 (실측), CQI 40 dip
-_ATTACK_PROFILES["Reactive_jam"]  = [(-1, 32),    (-12.5,-11.5), (0.0, 6.0),  (0.10,1.0),  (0.10,1.0),  (95,105),   (40,50),     (0.10,1.0)]
-_ATTACK_PROFILES["Reactive_clean"]= [(-1, 32),    (-12.5,-11.5), (0.0, 6.0),  (0.0,0.05),  (0.0,0.05),  (95,105),   (40,50),     (0.0,0.05)]
+_ATTACK_PROFILES["Random_jam"]    = [(-1, 32),    (-12.5,-11.5), (-1.0, 6.0), (0.10,1.0),  (0.10,1.0),  (95,105),   (11.4,15.0), (0.10,1.0)]
+_ATTACK_PROFILES["Random_clean"]  = [(-1, 32),    (-12.5,-11.5), (0.0, 6.0),  (0.0,0.05),  (0.0,0.05),  (95,105),   (12.0,15.0), (0.0,0.05)]
+# Reactive: duty 40% → BLER 0~1.0, mean=0.28 (실측), CQI 12 dip
+_ATTACK_PROFILES["Reactive_jam"]  = [(-1, 32),    (-12.5,-11.5), (0.0, 6.0),  (0.10,1.0),  (0.10,1.0),  (95,105),   (12.0,15.0), (0.10,1.0)]
+_ATTACK_PROFILES["Reactive_clean"]= [(-1, 32),    (-12.5,-11.5), (0.0, 6.0),  (0.0,0.05),  (0.0,0.05),  (95,105),   (12.0,15.0), (0.0,0.05)]
 
 
 def _sample_profile(profile: list) -> np.ndarray:

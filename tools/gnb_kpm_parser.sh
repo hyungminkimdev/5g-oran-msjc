@@ -37,14 +37,13 @@ tail -f /tmp/gnb.log | grep -a --line-buffered "MSJC KPM report_metrics" | while
     BLER="0.0"
   fi
 
-  # Convert CQI observation count to actual CQI (cqi_obs is sum of CQI values / period)
-  # In gNB, cqi_obs is the raw CQI accumulator; 15 means CQI=15 for 1 sample
-  # If cqi_obs > 15, it means multiple samples accumulated
-  echo "$(date +%s.%N),$LABEL,$NUES,$CQI,$PUSCH,$PUCCH,$DL_OK,$DL_NOK,$BLER" >> "$OUTCSV"
+  # cqi_obs는 srsRAN 내부 accumulator (0-50). 3GPP 표준 CQI(0-15)로 변환.
+  CQI_STD=$(echo "scale=2; $CQI * 15 / 50" | bc)
+  echo "$(date +%s.%N),$LABEL,$NUES,$CQI_STD,$PUSCH,$PUCCH,$DL_OK,$DL_NOK,$BLER" >> "$OUTCSV"
 
   COUNT=$((COUNT + 1))
   if [ $((COUNT % 5)) -eq 0 ]; then
-    echo "  [$LABEL] #$COUNT CQI_obs=$CQI PUCCH_SNR=$PUCCH DL_BLER=$BLER"
+    echo "  [$LABEL] #$COUNT CQI=$CQI_STD (obs=$CQI) PUCCH_SNR=$PUCCH DL_BLER=$BLER"
   fi
 done
 

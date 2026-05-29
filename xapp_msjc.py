@@ -674,7 +674,7 @@ class MSJCxApp:
         sig = (np.random.randn(n) + 1j * np.random.randn(n)).astype(np.complex64)
         sig *= noise_level
 
-        if cqi < 3:
+        if cqi < 1:  # CQI 0-15 scale: ~0 = PSS/SSS 협대역 재밍
             n_fft = 1024
             center_filt = np.zeros(n_fft, dtype=np.complex64)
             c = n_fft // 2

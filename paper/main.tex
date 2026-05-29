@@ -49,7 +49,7 @@ In this paper, we present MSJC (Multi-Stage Jamming Classification), a framework
 
     \item \textbf{Sliding-Window Statistical Features:} A 12-dimensional feature vector extracted from 15-second KPI windows that captures temporal patterns (BLER variance, periodicity, state transitions) invisible to per-sample classifiers, enabling detection of intermittent Random and Reactive jamming.
 
-    \item \textbf{Closed-Loop MLOps on Real O-RAN:} Adopting Rahman et al.'s SAJD architecture~\cite{rahman2025}, we implement GMM-based Labeler rApp and Training Manager rApp and extend them from binary detection to multi-class classification, with end-to-end validation on a real 5G testbed. Real-hardware integration revealed practical challenges absent from simulation, including an E2SM-KPM CQI scaling correction and the observation that protocol-aware attacks reduce CQI variance below normal-traffic levels---a temporal signature that became our strongest Stage~2 discriminator.
+    \item \textbf{Closed-Loop MLOps on Real O-RAN:} Adopting Rahman et al.'s SAJD architecture~\cite{rahman2025}, we implement GMM-based Labeler rApp and Training Manager rApp and extend them from binary detection to multi-class classification, with end-to-end validation on a real 5G testbed. Real-hardware integration revealed practical challenges absent from simulation, including the observation that protocol-aware attacks reduce CQI variance below normal-traffic levels---a counter-intuitive temporal signature that became our strongest Stage~2 discriminator.
 \end{enumerate}
 
 
@@ -141,11 +141,11 @@ Each E2SM-KPM indication message from the gNB is parsed and mapped to an 8-dimen
 \mathbf{x} = [\text{RSRP}, \text{RSRQ}, \text{SINR}, \text{BLER}, \text{NACK}, \text{Tput}, \text{CQI}, \text{HARQ}]
 \end{equation}
 
-\noindent where RSRP uses PUSCH SNR as a proxy, SINR is derived from PUCCH measurements, and CQI is automatically scaled from the E2SM-KPM range [0--15] to the accumulator range [0--50] used during training (a $\times$3.33 correction factor identified during real testbed integration). The current srsRAN E2SM-KPM implementation exposes five directly measured KPIs (PUSCH~SNR, PUCCH~SINR, DL~BLER, NACK~ratio, CQI); RSRQ, throughput, and HARQ retransmission ratio are reserved for commercial gNB deployments that report the full O-RAN KPM measurement set. All reported results therefore reflect classification performance using five active feature dimensions---a conservative baseline that full KPM support would only improve. In practice, SINR, BLER, and CQI serve as the primary discriminators: Constant jamming causes SINR to drop from $+$5.6 to $-$2.2\,dB and BLER to spike to 0.75, while protocol-aware attacks (PSS, PDCCH, DMRS) leave all KPIs virtually unchanged (Table~\ref{tab:kpm_stats}).
+\noindent where RSRP uses PUSCH SNR as a proxy and SINR is derived from PUCCH measurements. CQI values follow the 3GPP standard range [0--15]. The current srsRAN E2SM-KPM implementation exposes five directly measured KPIs (PUSCH~SNR, PUCCH~SINR, DL~BLER, NACK~ratio, CQI); RSRQ, throughput, and HARQ retransmission ratio are reserved for commercial gNB deployments that report the full O-RAN KPM measurement set. All reported results therefore reflect classification performance using five active feature dimensions---a conservative baseline that full KPM support would only improve. In practice, SINR, BLER, and CQI serve as the primary discriminators: Constant jamming causes SINR to drop from $+$5.6 to $-$2.2\,dB and BLER to spike to 0.75, while protocol-aware attacks (PSS, PDCCH, DMRS) leave all KPIs virtually unchanged (Table~\ref{tab:kpm_stats}).
 
 \subsection{Stage 1: MLP 5-Class Classifier}
 
-Following Hachimi et al.'s two-stage design~\cite{hachimi2020}, our Stage~1 uses an MLP as the first-pass classifier. We extend the original 4-class scheme to 5~classes (adding Deceptive as a catch-all for protocol-aware attacks) and replace raw I/Q features with 8-dimensional E2SM-KPM metrics. The architecture (8$\rightarrow$256$\rightarrow$128$\rightarrow$64$\rightarrow$5) with BatchNorm, ReLU, and Dropout~(0.3) totals 44,677 parameters. Training uses a hybrid dataset: synthetic KPI profiles calibrated to real testbed measurements (500 per class) mixed with real labeled samples from the testbed (approximately 765 real samples per fold after filtering). Clean-looking attack samples (BLER~$<$~0.03 and SINR~$>$~3\,dB and CQI~$>$~48) are deliberately excluded from Stage~1 training, as these protocol-aware attacks are designed to be caught by Stage~2 and classified by Stage~3. To prevent train/test leakage, both stages are evaluated via blocked temporal 5-fold cross-validation (detailed in Section~\ref{sec:results}).
+Following Hachimi et al.'s two-stage design~\cite{hachimi2020}, our Stage~1 uses an MLP as the first-pass classifier. We extend the original 4-class scheme to 5~classes (adding Deceptive as a catch-all for protocol-aware attacks) and replace raw I/Q features with 8-dimensional E2SM-KPM metrics. The architecture (8$\rightarrow$256$\rightarrow$128$\rightarrow$64$\rightarrow$5) with BatchNorm, ReLU, and Dropout~(0.3) totals 44,677 parameters. Training uses a hybrid dataset: synthetic KPI profiles calibrated to real testbed measurements (500 per class) mixed with real labeled samples from the testbed (approximately 765 real samples per fold after filtering). Clean-looking attack samples (BLER~$<$~0.03 and SINR~$>$~3\,dB and CQI~$>$~14.4) are deliberately excluded from Stage~1 training, as these protocol-aware attacks are designed to be caught by Stage~2 and classified by Stage~3. To prevent train/test leakage, both stages are evaluated via blocked temporal 5-fold cross-validation (detailed in Section~\ref{sec:results}).
 
 \subsection{Stage 2: Sliding-Window KSVM}
 
@@ -161,7 +161,7 @@ We extract 12 statistical features from each window:
 
 \begin{itemize}
     \item \textbf{BLER statistics} ($\mu_b$, $\sigma^2_b$, $b_{\max}$, $r_b$): Mean, variance, maximum, and spike ratio (fraction of samples with BLER~$>$~0.03). Constant jamming produces high $\mu_b$ ($>$0.35); Random/Reactive produce intermittent BLER spikes with high variance and transitions.
-    \item \textbf{SINR/CQI statistics} ($\mu_s$, $\sigma^2_s$, $s_{\min}$, $\sigma^2_c$, $c_{\min}$): Capture signal quality degradation and variability. Protocol-aware attacks produce a distinct SINR signature ($\mu_s \approx 4.7$\,dB) compared to Normal traffic ($\mu_s \approx 5.6$\,dB), despite leaving BLER near zero. Notably, we observed that CQI variance ($\sigma^2_c$) \textit{decreases} under protocol-aware attacks ($\sigma^2_c \approx 1.2$) compared to Normal traffic ($\sigma^2_c \approx 11$). Under normal conditions, the gNB scheduler's dynamic MCS and resource allocation produce natural CQI fluctuations; the consistent narrowband interference from protocol-aware attacks suppresses this variability, yielding an unexpectedly stable CQI. This counter-intuitive signature, discovered during real testbed experiments, proved to be our most effective Stage~2 discriminator.
+    \item \textbf{SINR/CQI statistics} ($\mu_s$, $\sigma^2_s$, $s_{\min}$, $\sigma^2_c$, $c_{\min}$): Capture signal quality degradation and variability. Protocol-aware attacks produce a distinct SINR signature ($\mu_s \approx 4.7$\,dB) compared to Normal traffic ($\mu_s \approx 5.6$\,dB), despite leaving BLER near zero. Notably, we observed that CQI variance ($\sigma^2_c$) \textit{decreases} under protocol-aware attacks ($\sigma^2_c \approx 0.11$) compared to Normal traffic ($\sigma^2_c \approx 1.0$). Under normal conditions, the gNB scheduler's dynamic MCS and resource allocation produce natural CQI fluctuations; the consistent narrowband interference from protocol-aware attacks suppresses this variability, yielding an unexpectedly stable CQI. This counter-intuitive signature, discovered during real testbed experiments, proved to be our most effective Stage~2 discriminator.
     \item \textbf{Temporal dynamics} ($\rho_b$, $\tau_b$): BLER autocorrelation at lag-1 distinguishes Reactive (periodic, high $\rho_b$) from Random (aperiodic, low $\rho_b$) jamming; state transition count $\tau_b$ captures BLER on/off switching frequency.
 \end{itemize}
 
@@ -192,14 +192,14 @@ We collected 1,492 KPI samples (1-second intervals) across all seven jamming mod
 \toprule
 Mode & N & SINR (dB) & BLER & CQI \\
 \midrule
-Normal & 678 & $+5.6 \pm 2.5$ & $0.032 \pm 0.16$ & $48.6 \pm 6.1$ \\
-Constant & 100 & $-2.2 \pm 6.5$ & $0.749 \pm 0.34$ & $34.8 \pm 21$ \\
-Random & 119 & $+4.2 \pm 0.9$ & $0.328 \pm 0.25$ & $49.2 \pm 2.0$ \\
-Reactive & 119 & $+4.2 \pm 0.9$ & $0.275 \pm 0.25$ & $49.4 \pm 1.7$ \\
-Deceptive & 119 & $+4.7 \pm 0.6$ & $0.000 \pm 0.00$ & $49.8 \pm 1.2$ \\
-PSS & 119 & $+4.8 \pm 0.6$ & $0.008 \pm 0.06$ & $49.8 \pm 1.2$ \\
-PDCCH & 119 & $+4.7 \pm 0.6$ & $0.007 \pm 0.08$ & $49.9 \pm 0.9$ \\
-DMRS & 119 & $+4.7 \pm 0.6$ & $0.006 \pm 0.07$ & $49.8 \pm 1.0$ \\
+Normal & 678 & $+5.6 \pm 2.5$ & $0.032 \pm 0.16$ & $14.6 \pm 1.8$ \\
+Constant & 100 & $-2.2 \pm 6.5$ & $0.749 \pm 0.34$ & $10.4 \pm 6.3$ \\
+Random & 119 & $+4.2 \pm 0.9$ & $0.328 \pm 0.25$ & $14.8 \pm 0.6$ \\
+Reactive & 119 & $+4.2 \pm 0.9$ & $0.275 \pm 0.25$ & $14.8 \pm 0.5$ \\
+Deceptive & 119 & $+4.7 \pm 0.6$ & $0.000 \pm 0.00$ & $14.9 \pm 0.4$ \\
+PSS & 119 & $+4.8 \pm 0.6$ & $0.008 \pm 0.06$ & $14.9 \pm 0.4$ \\
+PDCCH & 119 & $+4.7 \pm 0.6$ & $0.007 \pm 0.08$ & $15.0 \pm 0.3$ \\
+DMRS & 119 & $+4.7 \pm 0.6$ & $0.006 \pm 0.07$ & $14.9 \pm 0.3$ \\
 \bottomrule
 \end{tabular}
 \end{table}

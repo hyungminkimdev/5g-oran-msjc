@@ -239,7 +239,7 @@ def generate_synthetic_dataset(n_per_class: int = 500, real_csv: str = None):
                 # 공격 샘플: KPM 열화가 보이는 것만 포함
                 # (clean-looking 공격은 Stage2/3 담당이므로 Stage1 학습에서 제외)
                 sinr, bler, cqi = feat[2], feat[3], feat[6]
-                if bler > 0.03 or sinr < 3.0 or cqi < 48:
+                if bler > 0.03 or sinr < 3.0 or cqi < 14.4:
                     X_list.append(feat)
                     y_list.append(LABEL_IDX[lbl])
                     added += 1
@@ -294,7 +294,7 @@ def generate_synthetic_dataset_with_real_split(
                 added += 1
             else:
                 sinr, bler, cqi = feat[2], feat[3], feat[6]
-                if bler > 0.03 or sinr < 3.0 or cqi < 48:
+                if bler > 0.03 or sinr < 3.0 or cqi < 14.4:
                     X_list.append(feat)
                     y_list.append(LABEL_IDX[lbl])
                     added += 1
