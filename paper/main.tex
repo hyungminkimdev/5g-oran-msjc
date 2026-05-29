@@ -25,7 +25,7 @@
 
 % ================================================================
 \begin{abstract}
-Jamming attacks threaten 5G networks, yet most existing detection methods rely on simulated data and lack deployment on standardized O-RAN architectures. We present MSJC, a Multi-Stage Jamming Classification framework deployed on a real 5G O-RAN testbed that detects seven distinct jamming attack types---including protocol-aware attacks targeting PSS, PDCCH, and DMRS---with 100\% detection for six of seven modes (91.9\% for PDCCH) and 5.3\% false alarm rate. Our three-stage cascade combines: (1)~an MLP for fast 5-class KPI-based classification, (2)~a sliding-window KSVM that extracts 12-dimensional temporal statistics to detect intermittent attacks invisible to per-sample classifiers, and (3)~a MobileNetV3 for I/Q spectrogram-based protocol-aware sub-classification achieving 85\% accuracy across four sub-types. We further implement a closed-loop MLOps pipeline with GMM-based auto-labeling and automated retraining via the A1 interface. All results are validated via blocked temporal 5-fold cross-validation on 1,492 real testbed samples with zero sample overlap between train and test sets. Experiments on the CCI~xG Testbed with three USRP~X310 software-defined radios demonstrate end-to-end inference latency $\leq$23\,ms (p95), well within the Near-RT~RIC 100\,ms budget.
+Jamming attacks threaten 5G networks, yet most existing detection methods rely on simulated data and lack deployment on standardized O-RAN architectures. We present MSJC, a Multi-Stage Jamming Classification framework deployed on a real 5G O-RAN testbed that detects seven distinct jamming attack types---including protocol-aware attacks targeting PSS, PDCCH, and DMRS---with 100\% detection for six of seven modes (91.9\% for PDCCH) and 5.3\% false positive rate. Our three-stage cascade combines: (1)~a multilayer perceptron (MLP) for fast 5-class KPI-based classification, (2)~a sliding-window kernelized support vector machine (KSVM) that extracts 12-dimensional temporal statistics to detect intermittent attacks invisible to per-sample classifiers, and (3)~a MobileNetV3 convolutional neural network for I/Q spectrogram-based protocol-aware sub-classification achieving 85\% accuracy across four sub-types. We further implement a closed-loop machine learning operations (MLOps) pipeline with Gaussian mixture model (GMM)-based auto-labeling and automated retraining via the A1 interface. All results are validated via blocked temporal 5-fold cross-validation on 1,492 real testbed samples with zero sample overlap between train and test sets. Experiments on the CCI~xG Testbed with three USRP~X310 software-defined radios demonstrate end-to-end inference latency $\leq$23\,ms (p95), well within the Near-RT~RIC 100\,ms budget.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -36,7 +36,7 @@ Jamming attacks threaten 5G networks, yet most existing detection methods rely o
 \section{Introduction}
 \label{sec:intro}
 
-The Open Radio Access Network (O-RAN) architecture disaggregates the traditional RAN into programmable, multi-vendor components controlled by RAN Intelligent Controllers (RICs)~\cite{polese2023, abdalla2022}. While this openness enables innovation through xApps and rApps~\cite{santos2025, hoffmann2024}, it also expands the attack surface, making 5G networks vulnerable to RF jamming~\cite{pirayesh2022, harvanek2024}. Tactical and military 5G deployments in contested RF environments face this threat most directly, as adversaries may employ protocol-aware electronic warfare (EW) techniques.
+The Open Radio Access Network (O-RAN) architecture disaggregates the traditional RAN into programmable, multi-vendor components controlled by RAN Intelligent Controllers (RICs)~\cite{polese2023, abdalla2022}. While this openness enables innovation through xApps and rApps~\cite{santos2025, hoffmann2024}, 5G networks remain vulnerable to RF jamming---a physical-layer threat common to all cellular architectures~\cite{pirayesh2022, harvanek2024}. O-RAN's programmable RAN Intelligent Controllers, however, provide a unique platform to address this threat through real-time ML-based detection deployed as xApps. Tactical and military 5G deployments in contested RF environments face this threat most directly, as adversaries may employ protocol-aware electronic warfare (EW) techniques.
 
 Modern jamming attacks against 5G New Radio (NR) are no longer limited to broadband noise. Protocol-aware jammers can selectively target synchronization signals (PSS/SSS), control channels (PDCCH), or reference signals (DMRS), each producing distinct spectral signatures but minimal impact on aggregate KPI metrics~\cite{savadatti2024, shahid2024}. Detecting and classifying these attack types in real time is necessary for timely mitigation.
 
@@ -45,11 +45,11 @@ Existing ML-based jamming detection approaches have two main limitations. First,
 In this paper, we present MSJC (Multi-Stage Jamming Classification), a framework implemented as a Near-RT RIC xApp for real-time inference with Non-RT RIC rApps for closed-loop MLOps, validated on the CCI~xG Testbed~\cite{dasilva2025}. Our contributions are:
 
 \begin{enumerate}
-    \item \textbf{3-Stage Classification Cascade:} Extending Hachimi et al.'s two-stage MLP$+$KSVM design~\cite{hachimi2020} from C-RAN to O-RAN, we add a third stage (MobileNetV3~\cite{howard2019}) for protocol-aware spectrogram classification, redesign the KSVM with sliding-window temporal features, expand from 4 to 7 jamming modes, and validate on real 5G hardware---achieving 100\% detection for six modes with 5.3\% false alarm rate and $\leq$23\,ms latency (p95), evaluated via blocked temporal cross-validation.
+    \item \textbf{3-Stage Classification Cascade:} Extending Hachimi et al.'s two-stage MLP$+$KSVM design~\cite{hachimi2020} from C-RAN to O-RAN, we add a third stage (MobileNetV3~\cite{howard2019}) for protocol-aware spectrogram classification, redesign the KSVM with sliding-window temporal features, expand from 4 to 7 jamming modes, and validate on real 5G hardware---achieving 100\% detection for six modes with 5.3\% false positive rate and $\leq$23\,ms latency (p95), evaluated via blocked temporal cross-validation.
 
     \item \textbf{Sliding-Window Statistical Features:} A 12-dimensional feature vector extracted from 15-second KPI windows that captures temporal patterns (BLER variance, periodicity, state transitions) invisible to per-sample classifiers, enabling detection of intermittent Random and Reactive jamming.
 
-    \item \textbf{Closed-Loop MLOps on Real O-RAN:} Adopting Rahman et al.'s SAJD architecture~\cite{rahman2025}, we implement GMM-based Labeler rApp and Training Manager rApp and extend them from binary detection to multi-class classification, with end-to-end validation on a real 5G testbed---the first such demonstration on actual hardware.
+    \item \textbf{Closed-Loop MLOps on Real O-RAN:} Adopting Rahman et al.'s SAJD architecture~\cite{rahman2025}, we implement GMM-based Labeler rApp and Training Manager rApp and extend them from binary detection to multi-class classification, with end-to-end validation on a real 5G testbed. Real-hardware integration revealed practical challenges absent from simulation, including an E2SM-KPM CQI scaling correction and the observation that protocol-aware attacks reduce CQI variance below normal-traffic levels---a temporal signature that became our strongest Stage~2 discriminator.
 \end{enumerate}
 
 
@@ -61,7 +61,7 @@ Pirayesh and Zeng~\cite{pirayesh2022} survey jamming attacks and countermeasures
 
 Hachimi et al.~\cite{hachimi2020} proposed a two-stage MLP$+$KSVM cascade for 4-class jamming classification in 5G C-RAN, achieving 94.51\% on simulated data but without real RF validation, O-RAN integration, or temporal feature extraction. Jere et al.~\cite{jere2024} demonstrated Bayesian ML on a real 5G NR testbed (AUC~$>$0.988, 180\,ms delay) but without O-RAN interfaces or protocol-aware classification. Our work extends Hachimi's cascade to three stages (adding MobileNetV3~\cite{howard2019} for spectrogram-based protocol sub-typing), redesigns the KSVM with sliding-window temporal statistics, expands to seven jamming modes, and deploys on a real O-RAN testbed.
 
-Several works deploy security xApps on the Near-RT RIC: Moore et al.~\cite{moore2025} demonstrated LSTM-based intrusion detection on a real testbed; Bogucka et al.~\cite{bogucka2025} implemented jamming detection with MCS adaptation; Paz-P\'{e}rez et al.~\cite{pazperez2025} designed a four-xApp cascade on FlexRIC; and Reus-Muns et al.~\cite{reusmuns2024} validated spectrogram-based detection via a YOLO xApp. However, none combine multi-class classification with protocol-aware sub-typing and closed-loop retraining. Rahman et al.~\cite{rahman2025} proposed SAJD with GMM-based auto-labeling and ClearML-driven retraining via the A1 interface, but limited to binary detection in simulation. We adopt Rahman's MLOps architecture and extend it to 7-class classification on real hardware.
+Several works deploy security xApps on the Near-RT RIC: Moore et al.~\cite{moore2025} demonstrated long short-term memory (LSTM)-based intrusion detection on a real testbed; Bogucka et al.~\cite{bogucka2025} implemented jamming detection with MCS adaptation; Paz-P\'{e}rez et al.~\cite{pazperez2025} designed a four-xApp cascade on FlexRIC; and Reus-Muns et al.~\cite{reusmuns2024} validated spectrogram-based detection via a YOLO xApp. However, none combine multi-class classification with protocol-aware sub-typing and closed-loop retraining. Rahman et al.~\cite{rahman2025} proposed SAJD with GMM-based auto-labeling and ClearML-driven retraining via the A1 interface, but limited to binary detection in simulation. We adopt Rahman's MLOps architecture and extend it to 7-class classification on real hardware.
 
 
 % ================================================================
@@ -82,7 +82,7 @@ Each instance is equipped with an Ettus USRP X310 SDR connected via 10G Ethernet
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{fig_architecture.pdf}
+\includegraphics[width=0.92\columnwidth]{fig_architecture.pdf}
 \caption{MSJC testbed architecture on the CCI~xG Testbed. The MSJC xApp runs on the FlexRIC Near-RT RIC, receiving E2SM-KPM telemetry from the gNB. Non-RT RIC rApps automate labeling and retraining via the A1 interface.}
 \label{fig:arch}
 \end{figure}
@@ -107,7 +107,7 @@ The xApp implements a three-stage cascade optimized for the Near-RT RIC's 100\,m
 
 \textbf{Stage~1 (MLP):} Classifies each 8-dimensional KPI vector into five classes (Normal, Constant, Random, Reactive, Deceptive) in 1--2\,ms. Constant, Random, and Reactive detections are confirmed immediately.
 
-\textbf{Stage~2 (KSVM):} Re-examines Normal verdicts using a sliding window of $W=15$ samples (15~seconds). Twelve statistical features capture temporal patterns invisible to per-sample analysis. An RBF-kernel SVM decides Normal vs.\ Attack in 3--4\,ms.
+\textbf{Stage~2 (KSVM):} Re-examines Normal verdicts using a sliding window of $W=15$ samples (15~seconds). Twelve statistical features capture temporal patterns invisible to per-sample analysis. A radial basis function (RBF)-kernel SVM decides Normal vs.\ Attack in 3--4\,ms.
 
 \textbf{Stage~3 (MobileNetV3):} Invoked only for Deceptive detections or Stage~2 false-negative catches. Raw I/Q snapshots (16,384 complex samples via passive USRP reception) are converted to 224$\times$224 spectrograms~\cite{reusmuns2024} and classified into PSS/SSS, PDCCH, DMRS, or Generic Deceptive in 8--21\,ms.
 
@@ -115,7 +115,7 @@ The xApp implements a three-stage cascade optimized for the Near-RT RIC's 100\,m
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{fig_pipeline.pdf}
+\includegraphics[width=0.92\columnwidth]{fig_pipeline.pdf}
 \caption{MSJC three-stage classification cascade. Stage~1 classifies per-sample KPIs; Stage~2 re-examines Normal verdicts via sliding-window statistics; Stage~3 performs protocol-aware I/Q spectrogram classification. All paths complete within 23\,ms (p95).}
 \label{fig:pipeline}
 \end{figure}
@@ -161,7 +161,7 @@ We extract 12 statistical features from each window:
 
 \begin{itemize}
     \item \textbf{BLER statistics} ($\mu_b$, $\sigma^2_b$, $b_{\max}$, $r_b$): Mean, variance, maximum, and spike ratio (fraction of samples with BLER~$>$~0.03). Constant jamming produces high $\mu_b$ ($>$0.35); Random/Reactive produce intermittent BLER spikes with high variance and transitions.
-    \item \textbf{SINR/CQI statistics} ($\mu_s$, $\sigma^2_s$, $s_{\min}$, $\sigma^2_c$, $c_{\min}$): Capture signal quality degradation and variability. Protocol-aware attacks produce a distinct SINR signature ($\mu_s \approx 4.7$\,dB) compared to Normal traffic ($\mu_s \approx 5.6$\,dB), despite leaving BLER near zero. CQI variance ($\sigma^2_c$) further separates Normal traffic ($\sigma^2_c \approx 11$) from protocol-aware attacks ($\sigma^2_c \approx 1.2$), reflecting the natural scheduling-driven CQI fluctuations absent under attack.
+    \item \textbf{SINR/CQI statistics} ($\mu_s$, $\sigma^2_s$, $s_{\min}$, $\sigma^2_c$, $c_{\min}$): Capture signal quality degradation and variability. Protocol-aware attacks produce a distinct SINR signature ($\mu_s \approx 4.7$\,dB) compared to Normal traffic ($\mu_s \approx 5.6$\,dB), despite leaving BLER near zero. Notably, we observed that CQI variance ($\sigma^2_c$) \textit{decreases} under protocol-aware attacks ($\sigma^2_c \approx 1.2$) compared to Normal traffic ($\sigma^2_c \approx 11$). Under normal conditions, the gNB scheduler's dynamic MCS and resource allocation produce natural CQI fluctuations; the consistent narrowband interference from protocol-aware attacks suppresses this variability, yielding an unexpectedly stable CQI. This counter-intuitive signature, discovered during real testbed experiments, proved to be our most effective Stage~2 discriminator.
     \item \textbf{Temporal dynamics} ($\rho_b$, $\tau_b$): BLER autocorrelation at lag-1 distinguishes Reactive (periodic, high $\rho_b$) from Random (aperiodic, low $\rho_b$) jamming; state transition count $\tau_b$ captures BLER on/off switching frequency.
 \end{itemize}
 
@@ -210,7 +210,7 @@ As illustrated in Fig.~\ref{fig:kpm_ts}, protocol-aware attacks leave per-sample
 
 Table~\ref{tab:detection} compares Stage~1 alone versus the combined pipeline. Stage~1 detects Constant jamming (97.0\%) through sustained BLER elevation, and partially detects Random (68.9\%) and Reactive (65.6\%) through intermittent BLER spikes. However, protocol-aware attacks evade per-sample classification entirely---Stage~1 detects $<$1\% of these four modes (Table~\ref{tab:kpm_stats}).
 
-The sliding-window KSVM in Stage~2 recovers nearly all false negatives by exploiting joint differences in SINR and CQI temporal statistics, as described in Section~\ref{sec:methodology}. The combined pipeline achieves \textbf{100\% detection for six of seven modes}, with PDCCH at 91.9\% (limited by one temporal block where the narrow CORESET-targeted interference falls below the SVM's decision boundary), and 5.3\% combined false alarm rate.
+The sliding-window KSVM in Stage~2 recovers nearly all false negatives by exploiting joint differences in SINR and CQI temporal statistics, as described in Section~\ref{sec:methodology}. The combined pipeline achieves \textbf{100\% detection for six of seven modes}, with PDCCH at 91.9\% (limited by one temporal block where the narrow CORESET-targeted interference falls below the SVM's decision boundary), and 5.3\% combined false positive rate.
 
 \begin{table}[t]
 \centering
@@ -221,7 +221,7 @@ The sliding-window KSVM in Stage~2 recovers nearly all false negatives by exploi
 \toprule
 Mode & Stage~1 & Stage~2 & Combined \\
 \midrule
-Normal (FA) & 3.7$\pm$4.8\% & 1.6$\pm$3.2\% & $\sim$\textbf{5.3\%} \\
+Normal (FP) & 3.7$\pm$4.8\% & 1.6$\pm$3.2\% & $\sim$\textbf{5.3\%} \\
 Constant & 97.0$\pm$6.0\% & 100\% & \textbf{100\%} \\
 Random & 68.9$\pm$7.4\% & 100\% & \textbf{100\%} \\
 Reactive & 65.6$\pm$6.2\% & 100\% & \textbf{100\%} \\
@@ -236,7 +236,7 @@ DMRS & 0\% & 100\% & \textbf{100\%} \\
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{fig_kpm_timeseries.pdf}
+\includegraphics[width=0.92\columnwidth]{fig_kpm_timeseries.pdf}
 \caption{KPI time-series under different jamming modes. Constant jamming causes sustained BLER elevation; Random/Reactive produce intermittent spikes; protocol-aware attacks (PSS, PDCCH, DMRS) remain invisible to per-sample KPI analysis.}
 \label{fig:kpm_ts}
 \end{figure}
@@ -247,21 +247,21 @@ Stage~3 MobileNetV3, fine-tuned with real I/Q captures from the testbed, achieve
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{fig_stage3_accuracy.pdf}
+\includegraphics[width=0.92\columnwidth]{fig_stage3_accuracy.pdf}
 \caption{Stage~3 per-class accuracy on 200 real I/Q captures (50 per class) from the testbed.}
 \label{fig:stage3}
 \end{figure}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{fig_spectrograms_best.pdf}
+\includegraphics[width=0.92\columnwidth]{fig_spectrograms_best.pdf}
 \caption{Spectrograms (224$\times$224) from real I/Q captures on the testbed for four protocol-aware attack types. Each exhibits distinct frequency-time signatures enabling Stage~3 classification.}
 \label{fig:spectrograms}
 \end{figure}
 
 \subsection{Latency Analysis}
 
-Table~\ref{tab:latency} shows all classification paths remain well within the Near-RT RIC's 100\,ms budget, with the fastest path (ATTACK\_CONFIRMED) completing in under 1\,ms and the heaviest path (FN\_CAUGHT, requiring all three stages) at $\leq$23\,ms (p95). This represents a 7.8$\times$ improvement over Jere et al.'s 180\,ms detection delay~\cite{jere2024}, enabled by the lightweight cascade design that avoids invoking Stage~3 for most samples.
+All inference runs on a shared cloud instance (8~vCPU Intel Xeon @ 2.1\,GHz, 8\,GB RAM) that simultaneously hosts the gNB, 5G~Core, and Near-RT~RIC processes. Table~\ref{tab:latency} shows all classification paths remain well within the Near-RT RIC's 100\,ms budget even under this resource-constrained setting, with the fastest path (ATTACK\_CONFIRMED) completing in under 1\,ms and the heaviest path (FN\_CAUGHT, requiring all three stages) at $\leq$23\,ms (p95). The cascade design keeps latency low by avoiding Stage~3 invocation for the majority of samples.
 
 \begin{table}[t]
 \centering
@@ -304,7 +304,7 @@ Sliding window & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ & \textbf{
 Closed-loop & $\times$ & $\times$ & $\times$ & $\times$ & \checkmark & \textbf{\checkmark} \\
 \midrule
 Detection & 94.5\% & 98.8\% & 99\% & N/A & N/A & \textbf{98.8\%} \\
-False alarm & N/A & N/A & N/A & N/A & N/A & \textbf{5.3\%} \\
+False positive & N/A & N/A & N/A & N/A & N/A & \textbf{5.3\%} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -318,7 +318,7 @@ We validated the complete closed-loop MLOps cycle on the testbed, extending Rahm
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented MSJC, a multi-stage jamming classification framework for 5G O-RAN that detects all seven jamming modes---including protocol-aware attacks targeting PSS, PDCCH, and DMRS---with 100\% detection for six of seven attack types (91.9\% for PDCCH), 5.3\% false alarm rate, and $\leq$23\,ms end-to-end latency (p95) on the CCI~xG Testbed, achieving 85\% Stage~3 protocol-aware sub-classification accuracy on real I/Q captures. All results are validated via blocked temporal 5-fold cross-validation with zero sample overlap between train and test sets, a stricter evaluation than the in-sample or hold-out methods used in prior work.
+We presented MSJC, a multi-stage jamming classification framework for 5G O-RAN that detects all seven jamming modes---including protocol-aware attacks targeting PSS, PDCCH, and DMRS---with 100\% detection for six of seven attack types (91.9\% for PDCCH), 5.3\% false positive rate, and $\leq$23\,ms end-to-end latency (p95) on the CCI~xG Testbed, achieving 85\% Stage~3 protocol-aware sub-classification accuracy on real I/Q captures. All results are validated via blocked temporal 5-fold cross-validation with zero sample overlap between train and test sets, a stricter evaluation than the in-sample or hold-out methods used in prior work.
 
 We show that protocol-aware attacks, while invisible to per-sample KPI classifiers, produce distinct multi-dimensional temporal signatures---including subtly depressed SINR and reduced CQI variability---that can be exploited through sliding-window statistical analysis with an RBF-kernel SVM. The three-stage cascade enables cost-effective deployment: most samples are classified in under 1\,ms by Stage~1, with the heavier Stage~3 spectrogram analysis invoked only when protocol-aware attacks are suspected.
 

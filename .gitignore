@@ -14,8 +14,17 @@ __pycache__/
 .vscode-server/
 .influxdbv2/
 
-# === 연구 자료 ===
-*.pdf
+# === 연구 자료 (타인 논문 — 저작권) ===
+paper/references/
+
+# === 컴파일 산출물 ===
+paper/main.pdf
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/*.synctex*
 
 # === 데이터 / 피처 ===
 *.npy
