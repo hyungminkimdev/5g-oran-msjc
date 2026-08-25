@@ -109,18 +109,18 @@ Our custom jammer generates seven distinct attack modes, with OFDM symbol struct
 
 The xApp implements a three-stage cascade designed for operation within the Near-RT RIC timescale, which typically ranges from 10\,ms to 1\,s~\cite{polese2023}:
 
-\textbf{Stage~1 (MLP):} Classifies each 8-dimensional KPI vector into five classes (Normal, Constant, Random, Reactive, Deceptive) in 1--2\,ms. Constant, Random, and Reactive detections are confirmed immediately.
+\textbf{Stage~1 (MLP):} Classifies each 8-dimensional KPI vector into five classes (Normal, Constant, Random, Reactive, Deceptive). Constant, Random, and Reactive detections are confirmed immediately.
 
-\textbf{Stage~2 (KSVM):} Re-examines Normal verdicts using a sliding window of $W=15$ samples (15~seconds). Twelve statistical features capture temporal patterns invisible to per-sample analysis. A radial basis function (RBF)-kernel SVM decides Normal vs.\ Attack in 3--4\,ms.
+\textbf{Stage~2 (KSVM):} Re-examines Normal verdicts using a sliding window of $W=15$ samples (15~seconds). Twelve statistical features capture temporal patterns invisible to per-sample analysis. After the required window has been populated, a radial basis function (RBF)-kernel SVM decides Normal vs.\ Attack.
 
-\textbf{Stage~3 (MobileNetV3):} Invoked only for Deceptive detections or Stage~1 Normal overrides, where Stage~2 classifies a window following a Stage~1 Normal decision as Attack. Raw I/Q snapshots (16,384 complex samples via passive USRP reception) are converted to 224$\times$224 spectrograms~\cite{reusmuns2024} and classified into PSS/SSS, PDCCH, DMRS, or Generic Deceptive in 8--21\,ms.
+\textbf{Stage~3 (MobileNetV3):} Invoked only for Deceptive detections or Stage~1 Normal overrides, where Stage~2 classifies a window following a Stage~1 Normal decision as Attack. Raw I/Q snapshots (16,384 complex samples via passive USRP reception) are converted to 224$\times$224 spectrograms~\cite{reusmuns2024} and classified into PSS/SSS, PDCCH, DMRS, or Generic Deceptive.
 
 \noindent Fig.~\ref{fig:pipeline} illustrates the complete classification cascade and decision flow.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.92\columnwidth]{fig_pipeline.pdf}
-\caption{Three-stage classification cascade. Stage~1 classifies per-sample KPIs; Stage~2 re-examines Normal verdicts via sliding-window statistics; Stage~3 performs protocol-aware I/Q spectrogram classification. All paths complete within 23\,ms (p95).}
+\caption{Three-stage classification cascade. Stage~1 classifies per-sample KPIs; Stage~2 re-examines Normal verdicts via sliding-window statistics; Stage~3 performs protocol-aware I/Q spectrogram classification. Once the required inputs are available, all classification paths complete within 23\,ms (p95).}
 \label{fig:pipeline}
 \end{figure}
 
