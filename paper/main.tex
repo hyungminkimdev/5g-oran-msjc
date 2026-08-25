@@ -29,7 +29,7 @@
 
 % ================================================================
 \begin{abstract}
-Jamming attacks threaten 5G networks, yet most existing detection methods rely on simulated data and lack deployment on standardized O-RAN architectures. We present a multi-stage jamming classification framework deployed on a real 5G O-RAN testbed that classifies seven distinct jamming attack types---including protocol-aware attacks targeting PSS, PDCCH, and DMRS---with 100\% detection for six of seven modes (91.9\% for PDCCH) and 5.3\% false positive rate. Our three-stage cascade combines: (1)~a multilayer perceptron (MLP) for fast 5-class KPI-based classification, (2)~a sliding-window kernelized support vector machine (KSVM) that extracts 12-dimensional temporal statistics to detect intermittent attacks invisible to per-sample classifiers, and (3)~a MobileNetV3 convolutional neural network for I/Q spectrogram-based protocol-aware sub-classification achieving 85\% accuracy across four sub-types. We further implement a prototype machine learning operations (MLOps) path with Gaussian mixture model (GMM)-based telemetry labeling, retraining orchestration, and model hot reload. All results are validated via blocked temporal 5-fold cross-validation on 1,492 real testbed samples with zero sample overlap between train and test sets. Experiments on the CCI~xG Testbed with three USRP~X310 software-defined radios demonstrate a cascade processing latency of $\leq$23\,ms (p95), within the typical Near-RT RIC operating timescale of 10\,ms to 1\,s.
+Jamming attacks threaten 5G networks, yet most existing detection methods rely on simulated data and lack deployment on standardized O-RAN architectures. We present a multi-stage jamming classification framework deployed on a real 5G O-RAN testbed that classifies seven distinct jamming attack types---including protocol-aware attacks targeting PSS, PDCCH, and DMRS---with 100\% detection for six of seven modes (91.9\% for PDCCH) and 5.3\% false positive rate. Our three-stage cascade combines: (1)~a multilayer perceptron (MLP) for fast 5-class KPI-based classification, (2)~a sliding-window kernelized support vector machine (KSVM) that extracts 12-dimensional temporal statistics to detect intermittent attacks invisible to per-sample classifiers, and (3)~a MobileNetV3 convolutional neural network for I/Q spectrogram-based protocol-aware sub-classification achieving 85\% accuracy across four sub-types. We further implement a prototype machine learning operations (MLOps) path with Gaussian mixture model (GMM)-based telemetry labeling, retraining orchestration, and model hot reload. Stage~1/2 results use blocked temporal 5-fold cross-validation on 1,492 real KPI samples with zero train/test overlap; Stage~3 is evaluated on 200 held-out real I/Q captures. Experiments on the CCI~xG Testbed with three USRP~X310 software-defined radios demonstrate a cascade processing latency of $\leq$23\,ms (p95), within the typical Near-RT RIC operating timescale of 10\,ms to 1\,s.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -184,7 +184,7 @@ MobileNetV3-Small~\cite{howard2019} (1.52M parameters) classifies these spectrog
 
 \subsection{Dataset and Configuration}
 
-We collected 1,492 KPI samples (1-second intervals) across all seven jamming modes plus Normal baseline on the CCI~xG Testbed~\cite{dasilva2025}: 678~Normal, 100~Constant, and 119~each for Random, Reactive, Deceptive, PSS, PDCCH, and DMRS. Additionally, 400 I/Q snapshots (50 per mode $\times$ 8 modes) were captured via passive USRP~X310 reception during active jamming. Table~\ref{tab:kpm_stats} summarizes the measured KPI statistics.
+We collected 1,492 KPI samples (1-second intervals) across all seven jamming modes plus Normal baseline on the CCI~xG Testbed~\cite{dasilva2025}: 678~Normal, 100~Constant, and 119~each for Random, Reactive, Deceptive, PSS, PDCCH, and DMRS. Additionally, 400 I/Q snapshots (50 per mode $\times$ 8 modes) were captured via passive USRP~X310 reception during active jamming. The PSS/SSS evaluation considers an already-connected UE with available per-UE KPM telemetry and therefore does not evaluate pre-attachment denial of initial access. Table~\ref{tab:kpm_stats} summarizes the measured KPI statistics.
 
 \begin{table}[t]
 \centering
@@ -240,7 +240,7 @@ DMRS & 0\% & 100\% & \textbf{100\%} \\
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.92\columnwidth]{fig_kpm_timeseries.pdf}
+\includegraphics[width=0.92\columnwidth]{fig_kpm_timeseries.png}
 \caption{KPI time-series under different jamming modes. Constant jamming causes sustained BLER elevation; Random/Reactive produce intermittent spikes; protocol-aware attacks (PSS, PDCCH, DMRS) remain invisible to per-sample KPI analysis.}
 \label{fig:kpm_ts}
 \end{figure}
@@ -251,14 +251,14 @@ Stage~3 MobileNetV3, fine-tuned with real I/Q captures from the testbed, achieve
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.92\columnwidth]{fig_stage3_accuracy.pdf}
+\includegraphics[width=0.92\columnwidth]{fig_stage3_accuracy.png}
 \caption{Stage~3 per-class accuracy on 200 real I/Q captures (50 per class) from the testbed.}
 \label{fig:stage3}
 \end{figure}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.92\columnwidth]{fig_spectrograms_best_new.pdf}
+\includegraphics[width=0.92\columnwidth]{fig_spectrograms_best_new.png}
 \caption{Spectrograms (224$\times$224) from real I/Q captures on the testbed for four protocol-aware attack types. Each exhibits distinct frequency-time signatures enabling Stage~3 classification.}
 \label{fig:spectrograms}
 \end{figure}
@@ -317,7 +317,7 @@ False positive & N/A & 1.6\% & N/A & N/A & N/A & \textbf{5.3\%} \\
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented a multi-stage jamming classification framework for 5G O-RAN that identifies all seven jamming modes---including protocol-aware attacks targeting PSS, PDCCH, and DMRS---with 100\% detection for six of seven attack types (91.9\% for PDCCH), 5.3\% false positive rate, and $\leq$23\,ms cascade processing latency (p95) on the CCI~xG Testbed, achieving 85\% Stage~3 protocol-aware sub-classification accuracy on real I/Q captures. All results are validated via blocked temporal 5-fold cross-validation with zero sample overlap between train and test sets, a stricter evaluation than the in-sample or hold-out methods used in prior work.
+We presented a multi-stage jamming classification framework for 5G O-RAN that identifies all seven jamming modes---including protocol-aware attacks targeting PSS, PDCCH, and DMRS---with 100\% detection for six of seven attack types (91.9\% for PDCCH), 5.3\% false positive rate, and $\leq$23\,ms cascade processing latency (p95) on the CCI~xG Testbed, achieving 85\% Stage~3 protocol-aware sub-classification accuracy on real I/Q captures. Stage~1/2 results are validated via blocked temporal 5-fold cross-validation with zero train/test overlap, while Stage~3 is evaluated on held-out real I/Q captures.
 
 We show that protocol-aware attacks, while invisible to per-sample KPI classifiers, produce distinct multi-dimensional temporal signatures---including subtly depressed SINR and reduced CQI variability---that can be exploited through sliding-window statistical analysis with an RBF-kernel SVM. The three-stage cascade enables cost-effective deployment: most samples are classified in under 1\,ms by Stage~1, with the heavier Stage~3 spectrogram analysis invoked only when protocol-aware attacks are suspected.
 

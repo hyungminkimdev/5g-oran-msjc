@@ -29,6 +29,8 @@ os.makedirs(OUTDIR, exist_ok=True)
 plt.rcParams.update({
     'font.size': 9,
     'font.family': 'serif',
+    'pdf.fonttype': 42,
+    'ps.fonttype': 42,
     'figure.dpi': 300,
     'axes.grid': True,
     'grid.alpha': 0.3,
